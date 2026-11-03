@@ -393,6 +393,11 @@ static struct config_entry c[] = {
 	},
 	{
 		PKG_STRING,
+		"PKG_UNICODE",
+		"auto",
+	},
+	{
+		PKG_STRING,
 		"METALOG",
 		NULL,
 	},

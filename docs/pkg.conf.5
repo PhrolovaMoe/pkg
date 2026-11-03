@@ -334,7 +334,8 @@ is set or
 .Ev TERM
 is unset or
 .Dq dumb .
-Unicode symbols are used when the locale is UTF-8, ASCII ones otherwise.
+Which symbols are used is set by
+.Cm PKG_UNICODE .
 Unstyled output is the plain format other tools may parse.
 Default:
 .Sy auto .
@@ -394,6 +395,31 @@ using the
 .Cm SSH_ARGS
 option in the repository configuration.
 Default: not set.
+.It Cm PKG_UNICODE: string
+Whether styled output
+.Po see
+.Cm PKG_COLOR
+.Pc
+uses Unicode symbols or plain ASCII ones:
+.Cm auto
+uses Unicode when the locale, as set by
+.Ev LC_ALL ,
+.Ev LC_CTYPE
+or
+.Ev LANG ,
+is UTF-8,
+.Cm always
+and
+.Cm never
+force the choice.
+Set it to
+.Cm always
+when pkg is run through tools that clear the environment, such as
+.Xr doas 1 ,
+.Xr cron 8
+or jails, on a UTF-8 terminal.
+Default:
+.Sy auto .
 .It Cm PLIST_KEYWORDS_DIR: string
 Directory containing definitions of plist keywords.
 Default: PORTSDIR/keyword.

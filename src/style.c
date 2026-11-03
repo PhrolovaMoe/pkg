@@ -161,7 +161,20 @@ style_init(void)
 
 	color_out = always || (auto_ok && isatty(STDOUT_FILENO));
 	color_err = always || (auto_ok && isatty(STDERR_FILENO));
-	unicode = locale_is_utf8();
+
+	/*
+	 * The locale is a guess: doas, cron and jails often start pkg with
+	 * none at all.  PKG_UNICODE lets the configuration settle it.
+	 */
+	mode = pkg_object_string(pkg_config_get("PKG_UNICODE"));
+	if (mode != NULL && (strcasecmp(mode, "always") == 0 ||
+	    strcasecmp(mode, "yes") == 0))
+		unicode = true;
+	else if (mode != NULL && (strcasecmp(mode, "never") == 0 ||
+	    strcasecmp(mode, "no") == 0))
+		unicode = false;
+	else
+		unicode = locale_is_utf8();
 }
 
 bool

@@ -295,6 +295,7 @@ void progressbar_tick(int64_t current, int64_t total);
 void progressbar_stop(void);
 
 extern sb_t *messages;
+void print_pkg_messages(void);
 
 
 /* pkg-query / pkg-rquery */

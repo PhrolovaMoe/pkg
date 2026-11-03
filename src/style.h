@@ -67,6 +67,13 @@ enum style_glyph {
 	GL_BAR_EMPTY,
 	GL_SYNC,
 	GL_GUTTER,
+	GL_MAIL,
+	GL_BOX_TL,
+	GL_BOX_BL,
+	GL_BOX_H,
+	GL_BOX_V,
+	GL_BOX_SEP,
+	GL_BOX_DASH,
 	GL_MAX
 };
 

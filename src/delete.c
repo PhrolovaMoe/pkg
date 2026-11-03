@@ -299,7 +299,7 @@ exec_delete(int argc, char **argv)
 		goto cleanup;
 
 	if (messages && messages->len > 0 && !quiet) {
-		printf("%s", sb_str(messages));
+		print_pkg_messages();
 	}
 	pkgdb_compact(db);
 	pkgcli_autoremove(db, autoremove_flag);

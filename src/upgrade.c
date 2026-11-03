@@ -425,7 +425,7 @@ exec_upgrade(int argc, char **argv)
 		}
 
 		if (messages && messages->len > 0 && !quiet)
-			printf("%s", sb_str(messages));
+			print_pkg_messages();
 		break;
 	}
 

@@ -1059,6 +1059,9 @@ event_cb_new_action(struct pkg_event *ev, int *debug __unused)
 	return (0);
 }
 
+/* Each pkg-message on its own, so print_pkg_messages() can frame them. */
+static vec_t(char *) fancy_messages = vec_init();
+
 static int
 event_cb_message(struct pkg_event *ev, int *debug __unused)
 {
@@ -1066,7 +1069,118 @@ event_cb_message(struct pkg_event *ev, int *debug __unused)
 	if (messages == NULL)
 		messages = &msgs;
 	sb_cat(messages, ev->e_pkg_message.msg);
+	if (style_fancy())
+		vec_push(&fancy_messages, xstrdup(ev->e_pkg_message.msg));
 	return (0);
+}
+
+/* One "│  text" line per line of s, up to (not including) end. */
+static void
+print_framed_lines(const char *s, const char *end, const char *frame)
+{
+	const char *nl;
+
+	while (s < end) {
+		nl = memchr(s, '\n', end - s);
+		if (nl == NULL)
+			nl = end;
+		printf("%s%s%s", frame, style_glyph(GL_BOX_V), S(ST_RESET));
+		if (nl > s)
+			printf("  %.*s", (int)(nl - s), s);
+		putchar('\n');
+		s = nl + 1;
+	}
+}
+
+/*
+ * Render one message as a card.  libpkg formats them as
+ *   "=====\nMessage from NAME-VERSION:\n\n--\ntext\n--\ntext\n" (install)
+ *   "Message from NAME-VERSION:\ntext\n"                         (removal)
+ * Anything else, such as script output, is printed as-is.  The text itself
+ * is never rewrapped so commands and URLs in it stay intact.
+ */
+static void
+print_fancy_message(const char *msg)
+{
+	const char *p = msg, *title, *title_end, *dash, *end, *sec, *next;
+	const char *sec_end, *frame;
+	bool removal, first = true;
+
+	removal = strncmp(p, "=====\n", 6) != 0;
+	if (!removal)
+		p += 6;
+	if (strncmp(p, "Message from ", 13) != 0 ||
+	    (title_end = strstr(p, ":\n")) == NULL) {
+		printf("%s", msg);
+		return;
+	}
+	title = p + 13;
+	p = title_end + 2;
+	if (*p == '\n')
+		p++;
+	frame = removal ? S(ST_DIM) : S(ST_ACCENT);
+
+	/* Header: ╭─ ✉ Message from curl-8.11.0 */
+	printf("\n%s%s%s%s ", frame, style_glyph(GL_BOX_TL),
+	    style_glyph(GL_BOX_H), S(ST_RESET));
+	printf("%s%s%s %sMessage from%s ", removal ? S(ST_REMOVE) : S(ST_ACCENT),
+	    style_glyph(GL_MAIL), S(ST_RESET), S(ST_BOLD), S(ST_RESET));
+	dash = title_end;
+	while (dash > title && *dash != '-')
+		dash--;
+	if (dash > title)
+		printf("%s%.*s%s%s-%s%s%.*s%s", S(ST_NAME), (int)(dash - title),
+		    title, S(ST_RESET), S(ST_DIM), S(ST_RESET), S(ST_VERSION),
+		    (int)(title_end - dash - 1), dash + 1, S(ST_RESET));
+	else
+		printf("%s%.*s%s", S(ST_NAME), (int)(title_end - title), title,
+		    S(ST_RESET));
+	if (removal)
+		printf(" %s(on removal)%s", S(ST_DIM), S(ST_RESET));
+	putchar('\n');
+
+	/* Body: sections separated by "--" lines, empty ones skipped. */
+	end = p + strlen(p);
+	while (end > p && end[-1] == '\n')
+		end--;
+	for (sec = p; sec < end; sec = next) {
+		if (strncmp(sec, "--\n", 3) == 0)
+			sec += 3;
+		next = strstr(sec, "\n--\n");
+		if (next == NULL || next >= end)
+			next = end;
+		else
+			next++;
+		sec_end = next;
+		while (sec_end > sec && sec_end[-1] == '\n')
+			sec_end--;
+		if (sec_end <= sec)
+			continue;
+		if (!first) {
+			printf("%s%s", frame, style_glyph(GL_BOX_SEP));
+			for (int i = 0; i < 3; i++)
+				fputs(style_glyph(GL_BOX_DASH), stdout);
+			printf("%s\n", S(ST_RESET));
+		}
+		first = false;
+		print_framed_lines(sec, sec_end, frame);
+	}
+	printf("%s%s%s%s\n", frame, style_glyph(GL_BOX_BL),
+	    style_glyph(GL_BOX_H), S(ST_RESET));
+}
+
+void
+print_pkg_messages(void)
+{
+	if (messages == NULL || messages->len == 0)
+		return;
+	if (!style_fancy() || fancy_messages.len == 0) {
+		printf("%s", sb_str(messages));
+		return;
+	}
+	vec_foreach(fancy_messages, i)
+		print_fancy_message(fancy_messages.d[i]);
+	vec_free_and_free(&fancy_messages, free);
 }
 
 static int

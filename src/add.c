@@ -208,7 +208,7 @@ exec_add(int argc, char **argv)
 
 	pkg_add_triggers();
 	if (messages && messages->len > 0 && !quiet)
-		printf("%s", sb_str(messages));
+		print_pkg_messages();
 
 	return (retcode == EPKG_OK ? EXIT_SUCCESS : EXIT_FAILURE);
 }

@@ -196,7 +196,10 @@ exec_register(int argc, char **argv)
 	retcode = pkg_add_port(db, pkg, input_path, location, testing_mode);
 
 	if (retcode == EPKG_OK && messages && messages->len > 0 && !quiet)
-		printf("%s\n", sb_str(messages));
+		if (style_fancy())
+			print_pkg_messages();
+		else
+			printf("%s\n", sb_str(messages));
 
 	pkg_free(pkg);
 	if (db != NULL) {

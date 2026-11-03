@@ -78,6 +78,87 @@ usage_version(void)
 	fprintf(stderr, "For more information see 'pkg help version'.\n");
 }
 
+/*
+ * Same columns and words as print_version(), colored by status: outdated
+ * packages in yellow, newer-than-remote in magenta, orphans dimmed.
+ */
+static void
+print_version_fancy(struct pkg *pkg, const char *source, const char *ver,
+    char key, unsigned int opt)
+{
+	const char *name = NULL, *version = NULL, *origin = NULL;
+	enum style_role role;
+	int w;
+
+	pkg_get(pkg, PKG_ATTR_NAME, &name);
+	pkg_get(pkg, PKG_ATTR_VERSION, &version);
+	pkg_get(pkg, PKG_ATTR_ORIGIN, &origin);
+
+	switch (key) {
+	case '<':
+		role = ST_WARN;
+		break;
+	case '=':
+		role = ST_OK;
+		break;
+	case '>':
+		role = ST_REINSTALL;
+		break;
+	case '?':
+		role = ST_DIM;
+		break;
+	default:
+		role = ST_ERROR;
+		break;
+	}
+
+	if (opt & VERSION_ORIGIN) {
+		printf("%s%s%s", S(ST_NAME), origin, S(ST_RESET));
+		w = strlen(origin);
+		if (w < 34)
+			printf("%*s", 34 - w, "");
+	} else {
+		printf("%s%s%s%s-%s%s%s%s", S(ST_NAME), name, S(ST_RESET),
+		    S(ST_DIM), S(ST_RESET),
+		    key == '<' ? S(ST_VER_UP_OLD) : S(ST_VERSION), version,
+		    S(ST_RESET));
+		w = 35 - (strlen(name) + 1 + strlen(version));
+		printf("%*s", w < 1 ? 1 : w, " ");
+	}
+	printf("%s%c%s", S(role), key, S(ST_RESET));
+
+	if (opt & VERSION_VERBOSE) {
+		switch (key) {
+		case '<':
+			printf("   %sneeds updating%s %s(%s has%s %s%s%s%s)%s",
+			    S(ST_WARN), S(ST_RESET), S(ST_DIM), source,
+			    S(ST_RESET), S(ST_VER_UP_NEW), ver, S(ST_RESET),
+			    S(ST_DIM), S(ST_RESET));
+			break;
+		case '=':
+			printf("   %sup-to-date with %s%s", S(ST_OK), source,
+			    S(ST_RESET));
+			break;
+		case '>':
+			printf("   %ssucceeds %s%s %s(%s has %s)%s",
+			    S(ST_REINSTALL), source, S(ST_RESET), S(ST_DIM),
+			    source, ver, S(ST_RESET));
+			break;
+		case '?':
+			printf("   %sorphaned: %s%s", S(ST_DIM), origin,
+			    S(ST_RESET));
+			break;
+		case '!':
+		default:
+			printf("   %sComparison failed%s", S(ST_ERROR),
+			    S(ST_RESET));
+			break;
+		}
+	}
+
+	putchar('\n');
+}
+
 static void
 print_version(struct pkg *pkg, const char *source, const char *ver,
 	      char limchar, unsigned int opt)
@@ -114,6 +195,11 @@ print_version(struct pkg *pkg, const char *source, const char *ver,
 
 	if ((opt & VERSION_NOSTATUS) && limchar == key)
 		return;
+
+	if (style_fancy()) {
+		print_version_fancy(pkg, source, ver, key, opt);
+		return;
+	}
 
 	if (opt & VERSION_ORIGIN) {
 		pkg_printf("%-34o", pkg);

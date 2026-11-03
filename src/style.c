@@ -47,6 +47,9 @@ static const char *codes[ST_MAX] = {
 	[ST_ACCENT]	 = "\033[1;35m",
 	[ST_BAR_DONE]	 = "\033[35m",
 	[ST_BAR_TODO]	 = "\033[90m",
+	[ST_LABEL]	 = "\033[1;34m",
+	[ST_COMMENT]	 = "\033[2m",
+	[ST_LINK]	 = "\033[4;34m",
 };
 
 static const char *glyphs_utf8[GL_MAX] = {
@@ -69,6 +72,8 @@ static const char *glyphs_utf8[GL_MAX] = {
 	[GL_BAR_FULL]	= "━",
 	[GL_BAR_HALF]	= "╸",
 	[GL_BAR_EMPTY]	= "━",
+	[GL_SYNC]	= "⟳",
+	[GL_GUTTER]	= "┃",
 };
 
 static const char *glyphs_ascii[GL_MAX] = {
@@ -91,6 +96,8 @@ static const char *glyphs_ascii[GL_MAX] = {
 	[GL_BAR_FULL]	= "=",
 	[GL_BAR_HALF]	= ">",
 	[GL_BAR_EMPTY]	= "-",
+	[GL_SYNC]	= "*",
+	[GL_GUTTER]	= "|",
 };
 
 static bool

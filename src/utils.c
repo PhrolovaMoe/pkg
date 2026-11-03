@@ -318,6 +318,49 @@ info_flags(uint64_t opt, bool remote)
 
 typedef struct pkgdb_it *(*pkgdb_query_fn)(struct pkgdb *, const char *);
 
+/*
+ * A "Label          : " field tag for pkg info.  The fancy form keeps the
+ * same text and alignment, only colored.
+ */
+static void
+info_label(const char *label, bool newline)
+{
+	if (style_fancy())
+		printf("%s%-15s%s%s:%s%s", S(ST_LABEL), label, S(ST_RESET),
+		    S(ST_DIM), S(ST_RESET), newline ? "\n" : " ");
+	else
+		printf(newline ? "%-15s:\n" : "%-15s: ", label);
+}
+
+/*
+ * "name-version" (or "@group") with a bold name and colored version.
+ * Returns the visible width, like the pkg_printf() call it replaces.
+ */
+static int
+print_fancy_namever(struct pkg *pkg, bool is_group, bool with_version)
+{
+	const char *n = NULL, *v = NULL;
+
+	pkg_get(pkg, PKG_ATTR_NAME, &n);
+	pkg_get(pkg, PKG_ATTR_VERSION, &v);
+	if (n == NULL)
+		n = "";
+	if (v == NULL)
+		v = "";
+	if (is_group) {
+		printf("%s@%s%s%s%s", S(ST_DIM), S(ST_RESET), S(ST_GROUP), n,
+		    S(ST_RESET));
+		return (1 + strlen(n));
+	}
+	if (!with_version) {
+		printf("%s%s%s", S(ST_NAME), n, S(ST_RESET));
+		return (strlen(n));
+	}
+	printf("%s%s%s%s-%s%s%s%s", S(ST_NAME), n, S(ST_RESET), S(ST_DIM),
+	    S(ST_RESET), S(ST_VERSION), v, S(ST_RESET));
+	return (strlen(n) + 1 + strlen(v));
+}
+
 static void
 print_depinfo(struct pkgdb *db, struct pkg *pkg, bool print_tag,
     int shlib_attr, const char *shlib_label, pkgdb_query_fn shlib_query,
@@ -340,7 +383,7 @@ print_depinfo(struct pkgdb *db, struct pkg *pkg, bool print_tag,
 			continue;
 		if (!shlibstag) {
 			if (print_tag)
-				printf("%-15s:\n", shlib_label);
+				info_label(shlib_label, true);
 			shlibstag = true;
 		}
 		it = shlib_query(db, buf);
@@ -357,7 +400,7 @@ print_depinfo(struct pkgdb *db, struct pkg *pkg, bool print_tag,
 	while ((buf = pkg_stringlist_next(slit))) {
 		if (!reqtag) {
 			if (print_tag)
-				printf("%-15s:\n", provide_label);
+				info_label(provide_label, true);
 			reqtag = true;
 		}
 		it = provide_query(db, buf);
@@ -421,7 +464,11 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		   preference).  This may be the only output from this
 		   function */
 
-		if (options & INFO_TAG_NAMEVER) {
+		if (style_fancy() && (options & INFO_TAG_NAMEVER))
+			cout = print_fancy_namever(pkg, is_group, true);
+		else if (style_fancy() && (options & INFO_TAG_NAME))
+			cout = print_fancy_namever(pkg, is_group, false);
+		else if (options & INFO_TAG_NAMEVER) {
 			if (is_group)
 				cout = pkg_printf("@%n", pkg);
 			else
@@ -485,13 +532,15 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		switch (opt) {
 		case INFO_NAME:
 			if (print_tag)
-				printf("%-15s: ", "Name");
-			pkg_printf("%n\n", pkg);
+				info_label("Name", false);
+			printf("%s", S(ST_NAME));
+			pkg_printf("%n", pkg);
+			printf("%s\n", S(ST_RESET));
 			break;
 		case INFO_INSTALLED:
 			if (pkg_type(pkg) == PKG_INSTALLED) {
 				if (print_tag) {
-					printf("%-15s: ", "Installed on");
+					info_label("Installed on", false);
 					pkg_printf("%t%{%c %Z%}\n", pkg);
 				}
 			} else if (!print_tag)
@@ -501,21 +550,23 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Version");
-			pkg_printf("%v\n", pkg);
+				info_label("Version", false);
+			printf("%s", S(ST_VERSION));
+			pkg_printf("%v", pkg);
+			printf("%s\n", S(ST_RESET));
 			break;
 		case INFO_ORIGIN:
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Origin");
+				info_label("Origin", false);
 			pkg_printf("%o\n", pkg);
 			break;
 		case INFO_PREFIX:
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Prefix");
+				info_label("Prefix", false);
 			pkg_printf("%p\n", pkg);
 			break;
 		case INFO_REPOSITORY:
@@ -524,7 +575,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (pkg_type(pkg) == PKG_REMOTE &&
 			    repourl != NULL && repourl[0] != '\0') {
 				if (print_tag)
-					printf("%-15s: ", "Repository");
+					info_label("Repository", false);
 				pkg_printf("%N [%S]\n", pkg, repourl);
 			} else if (!print_tag)
 				putchar('\n');
@@ -533,39 +584,43 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Categories");
+				info_label("Categories", false);
 			pkg_printf("%C%{%Cn%| %}\n", pkg);
 			break;
 		case INFO_LICENSES:
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Licenses");
+				info_label("Licenses", false);
 			pkg_printf("%L%{%Ln%| %l %}\n", pkg);
 			break;
 		case INFO_MAINTAINER:
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Maintainer");
+				info_label("Maintainer", false);
 			pkg_printf("%m\n", pkg);
 			break;
 		case INFO_WWW:
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "WWW");
-			pkg_printf("%w\n", pkg);
+				info_label("WWW", false);
+			printf("%s", S(ST_LINK));
+			pkg_printf("%w", pkg);
+			printf("%s\n", S(ST_RESET));
 			break;
 		case INFO_COMMENT:
 			if (print_tag)
-				printf("%-15s: ", "Comment");
-			pkg_printf("%c\n", pkg);
+				info_label("Comment", false);
+			printf("%s", S(ST_COMMENT));
+			pkg_printf("%c", pkg);
+			printf("%s\n", S(ST_RESET));
 			break;
 		case INFO_OPTIONS:
 			if (pkg_list_count(pkg, PKG_OPTIONS) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Options");
+					info_label("Options", true);
 				if (quiet)
 					pkg_printf("%O%{%-15On: %Ov\n%|%}", pkg);
 				else
@@ -575,7 +630,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		case INFO_SHLIBS_REQUIRED:
 			if (pkg_list_count(pkg, PKG_SHLIBS_REQUIRED) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Shared Libs required");
+					info_label("Shared Libs required", true);
 				if (quiet)
 					pkg_printf("%B%{%Bn\n%|%}", pkg);
 				else
@@ -585,7 +640,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		case INFO_SHLIBS_PROVIDED:
 			if (pkg_list_count(pkg, PKG_SHLIBS_PROVIDED) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Shared Libs provided");
+					info_label("Shared Libs provided", true);
 				if (quiet)
 					pkg_printf("%b%{%bn\n%|%}", pkg);
 				else
@@ -595,7 +650,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		case INFO_REQUIRED:
 			if (pkg_list_count(pkg, PKG_REQUIRES) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Requires");
+					info_label("Requires", true);
 				if (quiet)
 					pkg_printf("%Y%{%Yn\n%|%}", pkg);
 				else
@@ -605,7 +660,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		case INFO_PROVIDED:
 			if (pkg_list_count(pkg, PKG_PROVIDES) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Provides");
+					info_label("Provides", true);
 				if (quiet)
 					pkg_printf("%y%{%yn\n%|%}", pkg);
 				else
@@ -616,7 +671,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s:\n", "Annotations");
+				info_label("Annotations", true);
 			if (quiet)
 				pkg_printf("%A%{%-15An: %Av\n%|%}", pkg);
 			else
@@ -626,13 +681,13 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Flat size");
+				info_label("Flat size", false);
 			pkg_printf("%#sB\n", pkg);
 			break;
 		case INFO_PKGSIZE: /* Remote pkgs only */
 			if (pkg_type(pkg) == PKG_REMOTE) {
 				if (print_tag)
-					printf("%-15s: ", "Pkg size");
+					info_label("Pkg size", false);
 				pkg_printf("%#xB\n", pkg);
 			} else if (!print_tag)
 			        putchar('\n');
@@ -641,21 +696,21 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s:\n", "Description");
+				info_label("Description", true);
 			pkg_printf("%e\n", pkg);
 			break;
 		case INFO_MESSAGE:
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s:\n", "Message");
+				info_label("Message", true);
 			if (pkg_has_message(pkg))
 				pkg_printf("%M\n", pkg);
 			break;
 		case INFO_DEPS:
 			if (pkg_list_count(pkg, PKG_DEPS) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Depends on");
+					info_label("Depends on", true);
 				if (quiet) {
 					if (show_locks)
 						pkg_printf("%d%{%dn-%dv%#dk\n%|%}", pkg);
@@ -678,7 +733,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 		case INFO_RDEPS:
 			if (pkg_list_count(pkg, PKG_RDEPS) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Required by");
+					info_label("Required by", true);
 				if (quiet) {
 					if (show_locks)
 						pkg_printf("%r%{%rn-%rv%#rk\n%|%}", pkg);
@@ -702,7 +757,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (pkg_type(pkg) != PKG_REMOTE &&
 			    pkg_list_count(pkg, PKG_FILES) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Files");
+					info_label("Files", true);
 				if (quiet)
 					pkg_printf("%F%{%Fn\n%|%}", pkg);
 				else
@@ -713,7 +768,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (pkg_type(pkg) != PKG_REMOTE &&
 			    pkg_list_count(pkg, PKG_DIRS) > 0) {
 				if (print_tag)
-					printf("%-15s:\n", "Directories");
+					info_label("Directories", true);
 				if (quiet)
 					pkg_printf("%D%{%Dn\n%|%}", pkg);
 				else
@@ -724,7 +779,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (pkg_type(pkg) != PKG_REMOTE &&
 			    pkg_list_count(pkg, PKG_USERS) > 0) {
 				if (print_tag)
-					printf("%-15s: ", "Users");
+					info_label("Users", false);
 				pkg_printf("%U%{%Un%| %}\n", pkg);
 			}
 			break;
@@ -732,7 +787,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (pkg_type(pkg) != PKG_REMOTE &&
 			    pkg_list_count(pkg, PKG_GROUPS) > 0) {
 				if (print_tag)
-					printf("%-15s: ", "Groups");
+					info_label("Groups", false);
 				pkg_printf("%G%{%Gn%| %}\n", pkg);
 			}
 			break;
@@ -740,14 +795,14 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			if (is_group)
 				break;
 			if (print_tag)
-				printf("%-15s: ", "Architecture");
+				info_label("Architecture", false);
 			pkg_printf("%q\n", pkg);
 			break;
 		case INFO_REPOURL:
 			if (pkg_type(pkg) == PKG_REMOTE &&
 			    repourl != NULL && repourl[0] != '\0') {
 				if (print_tag)
-					printf("%-15s: ", "Pkg URL");
+					info_label("Pkg URL", false);
 				if (repourl[strlen(repourl) -1] == '/')
 					pkg_printf("%S%R\n", repourl, pkg);
 				else
@@ -757,7 +812,7 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 			break;
 		case INFO_LOCKED:
 			if (print_tag)
-				printf("%-15s: ", "Locked");
+				info_label("Locked", false);
 			pkg_printf("%?k\n", pkg);
 			break;
 		}

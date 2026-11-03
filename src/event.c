@@ -968,7 +968,13 @@ event_cb_plugin_info(struct pkg_event *ev, int *debug __unused)
 static int
 event_cb_incremental_update(struct pkg_event *ev, int *debug __unused)
 {
-	if (!quiet)
+	if (!quiet && style_fancy())
+		printf("%s%s%s %s%s%s repository update completed. %s%d%s "
+		    "packages processed.\n", S(ST_OK), style_glyph(GL_OK),
+		    S(ST_RESET), S(ST_REPO), ev->e_incremental_update.reponame,
+		    S(ST_RESET), S(ST_BOLD), ev->e_incremental_update.processed,
+		    S(ST_RESET));
+	else if (!quiet)
 		printf("%s repository update completed. %d packages processed.\n",
 		    ev->e_incremental_update.reponame,
 		    ev->e_incremental_update.processed);

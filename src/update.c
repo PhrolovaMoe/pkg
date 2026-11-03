@@ -81,7 +81,12 @@ pkgcli_update(bool force, bool strict, c_charv_t *reponames)
 				continue;
 		}
 
-		if (!quiet)
+		if (!quiet && style_fancy())
+			printf("%s%s%s Updating %s%s%s repository catalogue"
+			    "%s...%s\n", S(ST_ACCENT), style_glyph(GL_SYNC),
+			    S(ST_RESET), S(ST_REPO), pkg_repo_name(r), S(ST_RESET),
+			    S(ST_DIM), S(ST_RESET));
+		else if (!quiet)
 			printf("Updating %s repository catalogue...\n",
 			    pkg_repo_name(r));
 
@@ -89,7 +94,12 @@ pkgcli_update(bool force, bool strict, c_charv_t *reponames)
 
 		if (retcode == EPKG_UPTODATE) {
 			retcode = EPKG_OK;
-			if (!quiet) {
+			if (!quiet && style_fancy()) {
+				printf("%s%s%s %s%s%s repository is up to "
+				    "date.\n", S(ST_OK), style_glyph(GL_OK),
+				    S(ST_RESET), S(ST_REPO), pkg_repo_name(r),
+				    S(ST_RESET));
+			} else if (!quiet) {
 				printf("%s repository is up to date.\n",
 				    pkg_repo_name(r));
 			}
@@ -129,7 +139,12 @@ pkgcli_update(bool force, bool strict, c_charv_t *reponames)
 	}
 	else if (update_count == total_count) {
 		if (!quiet) {
-			if (reponames == NULL || reponames->len == 0)
+			if ((reponames == NULL || reponames->len == 0) &&
+			    style_fancy())
+				printf("%s%s All repositories are up to "
+				    "date.%s\n", S(ST_OK), style_glyph(GL_OK),
+				    S(ST_RESET));
+			else if (reponames == NULL || reponames->len == 0)
 				printf("All repositories are up to date.\n");
 			else {
 				vec_foreach(*reponames, i)

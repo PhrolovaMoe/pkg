@@ -39,6 +39,9 @@ enum style_role {
 	ST_ACCENT,
 	ST_BAR_DONE,
 	ST_BAR_TODO,
+	ST_LABEL,		/* "Name           :" tags in pkg info */
+	ST_COMMENT,
+	ST_LINK,
 	ST_MAX
 };
 
@@ -62,6 +65,8 @@ enum style_glyph {
 	GL_BAR_FULL,
 	GL_BAR_HALF,
 	GL_BAR_EMPTY,
+	GL_SYNC,
+	GL_GUTTER,
 	GL_MAX
 };
 

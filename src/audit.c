@@ -93,6 +93,53 @@ print_recursive_rdeps(hash_t *head, struct pkg *p, hash_t *seen, bool top, ucl_o
 	}
 }
 
+/*
+ * Same lines as print_issue(), hung off a colored gutter so that several
+ * issues for one package read as a block.
+ */
+static void
+print_issue_fancy(const struct pkg_audit_entry *e,
+    struct pkg_audit_issue *issue, const char *version)
+{
+	const char *bar = style_glyph(GL_GUTTER);
+
+	if (version == NULL) {
+		const audit_versv_t *versions =
+		    &e->packages.d[issue->pkg_idx].versions;
+		printf("  %s%s%s %sAffected versions:%s\n", S(ST_ERROR), bar,
+		    S(ST_RESET), S(ST_LABEL), S(ST_RESET));
+		vec_foreach(*versions, _vi) {
+			const struct pkg_audit_versions_range *vers =
+			    &versions->d[_vi];
+			printf("  %s%s%s ", S(ST_ERROR), bar, S(ST_RESET));
+			if (vers->v1.type > 0 && vers->v2.type > 0)
+				printf("%s %s : %s %s\n",
+				    vop_names[vers->v1.type], vers->v1.version,
+				    vop_names[vers->v2.type], vers->v2.version);
+			else if (vers->v1.type > 0)
+				printf("%s %s\n",
+				    vop_names[vers->v1.type], vers->v1.version);
+			else
+				printf("%s %s\n",
+				    vop_names[vers->v2.type], vers->v2.version);
+		}
+	}
+	printf("  %s%s%s %s%s%s\n", S(ST_ERROR), bar, S(ST_RESET), S(ST_BOLD),
+	    e->desc, S(ST_RESET));
+	vec_foreach(e->cve, _ci) {
+		printf("  %s%s%s %sCVE:%s %s%s%s\n", S(ST_ERROR), bar,
+		    S(ST_RESET), S(ST_LABEL), S(ST_RESET), S(ST_WARN),
+		    e->cve.d[_ci].cvename, S(ST_RESET));
+	}
+	printf("  %s%s%s %sWWW:%s %s", S(ST_ERROR), bar, S(ST_RESET),
+	    S(ST_LABEL), S(ST_RESET), S(ST_LINK));
+	if (e->url)
+		printf("%s", e->url);
+	else if (e->id)
+		printf("https://vuxml.FreeBSD.org/freebsd/%s.html", e->id);
+	printf("%s\n\n", S(ST_RESET));
+}
+
 static void
 print_issue(struct pkg *p, struct pkg_audit_issue *issue)
 {
@@ -102,6 +149,10 @@ print_issue(struct pkg *p, struct pkg_audit_issue *issue)
 	pkg_get(p, PKG_ATTR_VERSION, &version);
 
 	e = issue->audit;
+	if (style_fancy()) {
+		print_issue_fancy(e, issue, version);
+		return;
+	}
 	if (version == NULL) {
 		const audit_versv_t *versions =
 		    &e->packages.d[issue->pkg_idx].versions;
@@ -420,12 +471,30 @@ exec_audit(int argc, char **argv)
 						continue;
 					}
 
-					pkg_printf("%n", pkg);
-					if (version != NULL)
-						pkg_printf("-%v", pkg);
-					if (!quiet)
-						printf(" is vulnerable");
-					printf(":\n");
+					if (style_fancy()) {
+						pkg_get(pkg, PKG_ATTR_NAME, &name);
+						printf("%s%s%s %s%s%s", S(ST_ERROR),
+						    style_glyph(GL_ERROR), S(ST_RESET),
+						    S(ST_NAME), name, S(ST_RESET));
+						if (version != NULL)
+							printf("%s-%s%s%s%s", S(ST_DIM),
+							    S(ST_RESET), S(ST_VER_UP_OLD),
+							    version, S(ST_RESET));
+						printf(" %sis vulnerable%s%s:%s "
+						    "%s(%zu issue%s)%s\n", S(ST_ERROR),
+						    S(ST_RESET), S(ST_DIM), S(ST_RESET),
+						    S(ST_DIM), issues->issues.len,
+						    issues->issues.len == 1 ? "" : "s",
+						    S(ST_RESET));
+						name = NULL;
+					} else {
+						pkg_printf("%n", pkg);
+						if (version != NULL)
+							pkg_printf("-%v", pkg);
+						if (!quiet)
+							printf(" is vulnerable");
+						printf(":\n");
+					}
 				} else {
 					if (vuln_objs == NULL)
 						vuln_objs = ucl_object_typed_new(UCL_OBJECT);
@@ -455,7 +524,11 @@ exec_audit(int argc, char **argv)
 
 					if (name == NULL)
 						pkg_get(pkg, PKG_ATTR_NAME, &name);
-					if (top == NULL) {
+					if (top == NULL && style_fancy()) {
+						printf("  %sPackages that depend on "
+						    "%s:%s ", S(ST_LABEL), name,
+						    S(ST_RESET));
+					} else if (top == NULL) {
 						printf("  Packages that depend on %s: ", name);
 					} else {
 						array = ucl_object_typed_new(UCL_ARRAY);
@@ -482,7 +555,12 @@ exec_audit(int argc, char **argv)
 			ret = EXIT_SUCCESS;
 
 		if (top == NULL) {
-			if (!quiet)
+			if (!quiet && style_fancy())
+				printf("%s%s %u problem(s) in %u package(s) "
+				    "found.%s\n", vuln > 0 ? S(ST_ERROR) : S(ST_OK),
+				    style_glyph(vuln > 0 ? GL_WARN : GL_OK),
+				    affected, vuln, S(ST_RESET));
+			else if (!quiet)
 				printf("%u problem(s) in %u package(s) found.\n",
 				   affected, vuln);
 

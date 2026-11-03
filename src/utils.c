@@ -422,14 +422,18 @@ print_depinfo(struct pkgdb *db, struct pkg *pkg, bool print_tag,
  */
 #define DEP_TREE_MAXDEPTH	64
 
+int info_tree_depth = 1;
+
 struct dep_tree {
 	struct pkgdb	*db;
 	hash_t		*seen;
 	bool		 reverse;
 	bool		 show_locks;
+	int		 max_depth;	/* 0: unlimited */
 	int		 unique;
 	int		 repeats;
 	int		 missing;
+	int		 hidden;	/* nodes cut off by max_depth */
 };
 
 struct dep_node {
@@ -508,6 +512,14 @@ dep_tree_children(struct dep_tree *t, struct pkg *pkg, sb_t *prefix,
 		    hash_get(t->seen, nodes[i].name) != NULL) {
 			printf(" %s(*)%s\n", S(ST_DIM), S(ST_RESET));
 			t->repeats++;
+		} else if (t->db != NULL && t->max_depth != 0 &&
+		    depth + 1 >= t->max_depth &&
+		    pkg_list_count(child, t->reverse ? PKG_RDEPS : PKG_DEPS) > 0) {
+			/* Depth limit: show how much is folded away. */
+			printf(" %s(+%d)%s\n", S(ST_DIM), pkg_list_count(child,
+			    t->reverse ? PKG_RDEPS : PKG_DEPS), S(ST_RESET));
+			t->unique++;
+			t->hidden++;
 		} else {
 			putchar('\n');
 			t->unique++;
@@ -542,6 +554,7 @@ print_dep_tree(struct pkgdb *db, struct pkg *pkg, bool reverse,
 	t.db = pkg_type(pkg) == PKG_INSTALLED ? db : NULL;
 	t.reverse = reverse;
 	t.show_locks = show_locks;
+	t.max_depth = info_tree_depth;
 	t.seen = hash_new();
 	pkg_get(pkg, PKG_ATTR_NAME, &name);
 	if (name != NULL)
@@ -562,6 +575,10 @@ print_dep_tree(struct pkgdb *db, struct pkg *pkg, bool reverse,
 			printf(" %s%s%s %s%d not installed%s",
 			    S(ST_DIM), style_glyph(GL_DOT), S(ST_RESET),
 			    S(ST_ERROR), t.missing, S(ST_RESET));
+		if (t.hidden > 0)
+			printf(" %s%s (+n) more below, -L 0 for the full "
+			    "tree%s", S(ST_DIM), style_glyph(GL_DOT),
+			    S(ST_RESET));
 		putchar('\n');
 	}
 	hash_destroy(t.seen);

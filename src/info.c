@@ -36,6 +36,7 @@
 #endif
 
 #include <err.h>
+#include <limits.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -98,7 +99,7 @@ usage_info(void)
 {
 	fprintf(stderr, "Usage: pkg info <pkg-name>\n");
 	fprintf(stderr, "       pkg info -a\n");
-	fprintf(stderr, "       pkg info [-AbBDdefIklOqRrs] [-Cgix] <pkg-name>\n");
+	fprintf(stderr, "       pkg info [-AbBDdefIklOqRrs] [-Cgix] [-L depth] <pkg-name>\n");
 	fprintf(stderr, "       pkg info [-AbBDdfIlqRrs] -F <pkg-file>\n\n");
 	fprintf(stderr, "For more information see 'pkg help info'.\n");
 }
@@ -133,6 +134,7 @@ exec_info(int argc, char **argv)
 	bool e_flag = false;
 	bool json_array = false;
 	bool json_first = true;
+	const char *errstr;
 #ifdef HAVE_CAPSICUM
 	cap_rights_t rights;
 #endif
@@ -153,6 +155,7 @@ exec_info(int argc, char **argv)
 		{ "case-insensitive",	no_argument,		NULL,	'i' },
 		{ "comment",		no_argument,		NULL,	'I' },
 		{ "locked",		no_argument,		NULL,	'k' },
+		{ "depth",		required_argument,	NULL,	'L' },
 		{ "list-files",		no_argument,		NULL,	'l' },
 		{ "origin",		no_argument,		NULL,	'o' },
 		{ "by-origin",		no_argument,		NULL,	'O' },
@@ -167,7 +170,7 @@ exec_info(int argc, char **argv)
 	};
 
 	/* TODO: exclusive opts ? */
-	while ((ch = getopt_long(argc, argv, "+aAbBCdDeEfF:giIkloOpqrRsx", longopts, NULL)) != -1) {
+	while ((ch = getopt_long(argc, argv, "+aAbBCdDeEfF:giIkL:loOpqrRsx", longopts, NULL)) != -1) {
 		switch (ch) {
 		case 'a':
 			match = MATCH_ALL;
@@ -240,6 +243,12 @@ exec_info(int argc, char **argv)
 			break;
 		case 'x':
 			match = MATCH_REGEX;
+			break;
+		case 'L':
+			info_tree_depth = strtonum(optarg, 0, INT_MAX, &errstr);
+			if (errstr != NULL)
+				errx(EXIT_FAILURE, "Invalid depth '%s': %s",
+				    optarg, errstr);
 			break;
 		case 1:
 			if (STRIEQ(optarg, "json"))

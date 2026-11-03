@@ -318,6 +318,26 @@ Default: NO.
 Specifies the cache directory for packages.
 Default:
 .Pa /var/cache/pkg .
+.It Cm PKG_COLOR: string
+When to style output with colors and Unicode symbols:
+.Cm auto
+styles it only when writing to a terminal,
+.Cm always
+also when writing to pipes and files, and
+.Cm never
+disables styling.
+In
+.Cm auto
+mode, styling is also disabled when
+.Ev NO_COLOR
+is set or
+.Ev TERM
+is unset or
+.Dq dumb .
+Unicode symbols are used when the locale is UTF-8, ASCII ones otherwise.
+Unstyled output is the plain format other tools may parse.
+Default:
+.Sy auto .
 .It Cm PKG_CREATE_VERBOSE: boolean
 When set to a
 .Sy true

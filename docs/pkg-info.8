@@ -28,6 +28,7 @@
 .Nm
 .Op Fl ABbDdefIklOpqRrs
 .Op Fl Cgix
+.Op Fl L Ar depth
 .Ar pkg-name
 .Nm
 .Op Fl ABbDdfIlpqRrs
@@ -82,6 +83,14 @@ Show the pkg-message for matching packages.
 Display the list of packages on which
 .Ar pkg-name
 depends.
+When the output is styled
+.Po see
+.Cm PKG_COLOR
+in
+.Xr pkg.conf 5
+.Pc ,
+the list is drawn as a tree; see
+.Fl L .
 .It Fl E , Cm --show-name-only
 Hides the full package output and only shows the package name.
 This option is deprecated and exists only for Ports compatibility.
@@ -122,6 +131,23 @@ Locking status is only meaningful for installed packages; all locking
 statuses will show as unlocked when information about a
 .Ar pkg-file
 is queried.
+.It Fl L Ar depth , Cm --depth Ar depth
+How many levels of the
+.Fl d
+and
+.Fl r
+trees to show when the output is styled.
+Only installed packages are followed.
+The default of 1 shows direct dependencies only, and 0 shows the whole
+tree.
+A package already shown higher up is marked
+.Sq (*)
+and not expanded again, and a package with deeper levels hidden is
+marked
+.Sq (+n) .
+Unstyled output, including
+.Fl q ,
+always lists direct dependencies only.
 .It Fl l , Cm --list-files
 Display all files installed by
 .Ar pkg-name .

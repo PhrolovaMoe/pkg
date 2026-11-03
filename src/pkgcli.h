@@ -23,6 +23,8 @@
 #define ll_foreach(head, el) for (el=head; el != NULL; el = (el)->next)
 
 extern bool quiet;
+/* Levels shown by the pkg info -d/-r trees; 0 means all. */
+extern int info_tree_depth;
 extern bool newpkgversion;
 extern int nbtodl;
 

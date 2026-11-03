@@ -2024,6 +2024,13 @@ pkg_get_cachedirfd(void)
 }
 
 int
+pkg_get_rootfd(void)
+{
+
+	return (ctx.rootfd);
+}
+
+int
 pkg_get_dbdirfd(void)
 {
 

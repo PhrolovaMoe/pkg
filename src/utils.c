@@ -584,6 +584,175 @@ print_dep_tree(struct pkgdb *db, struct pkg *pkg, bool reverse,
 	hash_destroy(t.seen);
 }
 
+/*
+ * pkg info -l on a terminal: files as a directory tree.  Directories that
+ * only lead to one other directory are folded into one line
+ * ("include/curl/").  Installed files are looked at under the package
+ * root so they can be colored by type, symlinks show their target, and
+ * files that have gone missing are flagged.
+ */
+struct file_tree {
+	int	rootfd;
+	int	files;
+	int	missing;
+};
+
+static int
+pathcmp(const void *a, const void *b)
+{
+	return (strcmp(*(char * const *)a, *(char * const *)b));
+}
+
+/* End of the path component starting at off: the next '/' or the NUL. */
+static size_t
+comp_end(const char *p, size_t off)
+{
+	const char *slash = strchr(p + off, '/');
+
+	return (slash != NULL ? (size_t)(slash - p) : strlen(p));
+}
+
+static void
+file_tree_leaf(struct file_tree *t, const char *path, size_t off)
+{
+	struct stat st;
+	const char *name = path + off;
+	char target[MAXPATHLEN];
+	ssize_t len;
+
+	t->files++;
+	if (t->rootfd == -1 ||
+	    fstatat(t->rootfd, path + 1, &st, AT_SYMLINK_NOFOLLOW) == -1) {
+		if (t->rootfd != -1 && errno == ENOENT) {
+			printf(" %s%s%s %s%s missing%s\n", S(ST_ERROR), name,
+			    S(ST_RESET), S(ST_ERROR), style_glyph(GL_ERROR),
+			    S(ST_RESET));
+			t->missing++;
+		} else
+			printf(" %s\n", name);
+		return;
+	}
+	if (S_ISLNK(st.st_mode)) {
+		len = readlinkat(t->rootfd, path + 1, target,
+		    sizeof(target) - 1);
+		target[len > 0 ? len : 0] = '\0';
+		printf(" %s%s%s %s%s %s%s\n", S(ST_VERSION), name, S(ST_RESET),
+		    S(ST_DIM), style_glyph(GL_ARROW), target, S(ST_RESET));
+	} else if (S_ISREG(st.st_mode) && (st.st_mode & 0111) != 0)
+		printf(" %s%s%s\n", S(ST_OK), name, S(ST_RESET));
+	else if (strstr(name, ".so") != NULL)
+		printf(" %s%s%s\n", S(ST_REPO), name, S(ST_RESET));
+	else if (strlen(name) > 7 &&
+	    strcmp(name + strlen(name) - 7, ".sample") == 0)
+		printf(" %s%s%s\n", S(ST_WARN), name, S(ST_RESET));
+	else
+		printf(" %s\n", name);
+}
+
+/*
+ * Extend the directory ending at de (a '/') over following components
+ * shared by every path in [lo, hi), so lone directory chains fold.
+ */
+static size_t
+fold_dirs(char **paths, size_t lo, size_t hi, size_t de)
+{
+	size_t ne, k;
+
+	for (;;) {
+		ne = comp_end(paths[lo], de + 1);
+		if (paths[lo][ne] != '/')
+			return (de);
+		for (k = lo + 1; k < hi; k++) {
+			if (strncmp(paths[k] + de + 1, paths[lo] + de + 1,
+			    ne - de - 1) != 0 || paths[k][ne] != '/')
+				return (de);
+		}
+		de = ne;
+	}
+}
+
+static void
+file_tree_level(struct file_tree *t, char **paths, size_t lo, size_t hi,
+    size_t off, sb_t *prefix)
+{
+	size_t i = lo, j, e, de, plen;
+	bool last;
+
+	while (i < hi) {
+		e = comp_end(paths[i], off);
+		for (j = i + 1; j < hi; j++) {
+			if (strncmp(paths[j] + off, paths[i] + off, e - off) != 0 ||
+			    (paths[j][e] != '/' && paths[j][e] != '\0'))
+				break;
+		}
+		last = (j == hi);
+		printf("%s%s%s%s%s", S(ST_DIM), sb_str(prefix),
+		    style_glyph(last ? GL_TREE_LAST : GL_TREE_MID),
+		    style_glyph(GL_BOX_H), S(ST_RESET));
+		if (paths[i][e] == '\0') {
+			file_tree_leaf(t, paths[i], off);
+		} else {
+			de = fold_dirs(paths, i, j, e);
+			printf(" %s%.*s/%s\n", S(ST_LABEL), (int)(de - off),
+			    paths[i] + off, S(ST_RESET));
+			plen = prefix->len;
+			sb_cat(prefix, last ? "   " : style_glyph(GL_TREE_PIPE));
+			if (!last)
+				sb_cat(prefix, "  ");
+			file_tree_level(t, paths, i, j, de + 1, prefix);
+			prefix->len = plen;
+			prefix->d[plen] = '\0';
+		}
+		i = j;
+	}
+}
+
+static void
+print_file_tree(struct pkg *pkg)
+{
+	struct file_tree t = { .rootfd = pkg_get_rootfd() };
+	struct pkg_file *file = NULL;
+	vec_t(char *) paths = vec_init();
+	sb_t prefix = sb_init();
+	int64_t flatsize = 0;
+	char size[8];
+	char *path;
+	size_t de;
+
+	while (pkg_files(pkg, &file) == EPKG_OK) {
+		path = NULL;
+		pkg_asprintf(&path, "%Fn", file);
+		/* Paths are absolute; anything else is shown as is. */
+		if (path != NULL)
+			vec_push(&paths, path);
+	}
+	if (paths.len == 0)
+		return;
+	qsort(paths.d, paths.len, sizeof(paths.d[0]), pathcmp);
+
+	/* The directory every file lives under, such as "/usr/local/". */
+	de = 0;
+	if (paths.d[0][0] == '/')
+		de = fold_dirs(paths.d, 0, paths.len, 0);
+	printf("  %s%.*s%s\n", S(ST_LABEL), (int)(de + 1), paths.d[0],
+	    S(ST_RESET));
+	sb_cat(&prefix, "  ");
+	file_tree_level(&t, paths.d, 0, paths.len, de + 1, &prefix);
+	sb_fini(&prefix);
+
+	pkg_get(pkg, PKG_ATTR_FLATSIZE, &flatsize);
+	humanize_number(size, sizeof(size), flatsize, "B", HN_AUTOSCALE,
+	    HN_IEC_PREFIXES | HN_DECIMAL);
+	printf("  %s%d file%s %s %s%s", S(ST_DIM), t.files,
+	    t.files == 1 ? "" : "s", style_glyph(GL_DOT), size, S(ST_RESET));
+	if (t.missing > 0)
+		printf(" %s%s%s %s%d missing%s", S(ST_DIM),
+		    style_glyph(GL_DOT), S(ST_RESET), S(ST_ERROR), t.missing,
+		    S(ST_RESET));
+	putchar('\n');
+	vec_free_and_free(&paths, free);
+}
+
 void
 print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 {
@@ -942,11 +1111,18 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 				    pkgdb_query_require);
 			break;
 		case INFO_FILES: /* Installed pkgs only */
+			if (style_fancy() && !quiet && !print_tag &&
+			    pkg_type(pkg) != PKG_REMOTE &&
+			    pkg_list_count(pkg, PKG_FILES) == 0)
+				printf("  %s(no files)%s\n", S(ST_DIM),
+				    S(ST_RESET));
 			if (pkg_type(pkg) != PKG_REMOTE &&
 			    pkg_list_count(pkg, PKG_FILES) > 0) {
 				if (print_tag)
 					info_label("Files", true);
-				if (quiet)
+				if (style_fancy() && !quiet)
+					print_file_tree(pkg);
+				else if (quiet)
 					pkg_printf("%F%{%Fn\n%|%}", pkg);
 				else
 					pkg_printf("%F%{\t%Fn\n%|%}", pkg);

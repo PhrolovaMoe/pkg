@@ -71,6 +71,7 @@ global:
 	pkg_get_i;
 	pkg_get_invalid;
 	pkg_get_kv;
+	pkg_get_rootfd;
 	pkg_get_s;
 	pkg_get_sl;
 	pkg_handle_sandboxed_call;

@@ -1819,6 +1819,8 @@ void pkg_cache_full_clean(void);
 const char *pkg_get_cachedir(void);
 int pkg_get_cachedirfd(void);
 int pkg_get_dbdirfd(void);
+/* Directory fd of the root packages are installed under (see -r). */
+int pkg_get_rootfd(void);
 
 int pkg_namecmp(struct pkg *, struct pkg *);
 

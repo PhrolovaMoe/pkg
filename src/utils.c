@@ -69,6 +69,14 @@ append_yesno(bool r, char *yesnomsg, size_t len)
 		yesnomsg[len - sizeof trunc - sizeof yes] = '\0';
 		strlcat(yesnomsg, trunc, len);
 	}
+	if (style_fancy()) {
+		char suffix[64];
+
+		snprintf(suffix, sizeof(suffix), "%s%s%s ", S(ST_DIM),
+		    r ? "[Y/n]" : "[y/N]", S(ST_RESET));
+		strlcat(yesnomsg, suffix, len);
+		return;
+	}
 	strlcat(yesnomsg, r ? yes : no, len);
 }
 
@@ -1147,6 +1155,22 @@ audit_check_summary(pkg_solved_display_t *disp)
 	}
 }
 
+/*
+ * "❯ Question?" for the fancy output.  Pass the result to query_yesno() as a
+ * "%S" argument: its format string goes through pkg_printf, where %s does
+ * not mean string.
+ */
+static const char *
+fancy_prompt(const char *question)
+{
+	static char buf[256];
+
+	snprintf(buf, sizeof(buf), "\n%s%s%s %s%s%s ", S(ST_ACCENT),
+	    style_glyph(GL_PROMPT), S(ST_RESET), S(ST_BOLD), question,
+	    S(ST_RESET));
+	return (buf);
+}
+
 bool
 confirm_jobs_action(struct pkg_jobs *jobs)
 {
@@ -1164,8 +1188,12 @@ confirm_jobs_action(struct pkg_jobs *jobs)
 	if (yes || quiet)
 		return (true);
 
-	if (type != PKG_JOBS_INSTALL && type != PKG_JOBS_UPGRADE)
+	if (type != PKG_JOBS_INSTALL && type != PKG_JOBS_UPGRADE) {
+		if (style_fancy())
+			return (query_yesno(false, "%S",
+			    fancy_prompt("Proceed with this action?")));
 		return (query_yesno(false, "\nProceed with this action? "));
+	}
 
 	sb_t names = sb_init();
 	char prompt[BUFSIZ];
@@ -1185,7 +1213,17 @@ confirm_jobs_action(struct pkg_jobs *jobs)
 		pkg_sb_printf(&names, "%n-%v", new_pkg, new_pkg);
 	}
 
-	if (nremovals > 0) {
+	if (nremovals > 0 && style_fancy()) {
+		printf("\n%s%s %d package(s) will be REMOVED by this "
+		    "operation%s", S(ST_WARN), style_glyph(GL_WARN), nremovals,
+		    S(ST_RESET));
+		if (explicit_removals > 0)
+			printf(", including %s%d%s that you installed "
+			    "explicitly: %s%s%s", S(ST_BOLD), explicit_removals,
+			    S(ST_RESET), S(ST_REMOVE), sb_str(&names),
+			    S(ST_RESET));
+		putchar('\n');
+	} else if (nremovals > 0) {
 		printf("\n>>> %d package(s) will be REMOVED by this operation",
 		    nremovals);
 		if (explicit_removals > 0)
@@ -1195,7 +1233,10 @@ confirm_jobs_action(struct pkg_jobs *jobs)
 		putchar('\n');
 	}
 
-	if (nremovals > 0)
+	if (style_fancy())
+		strlcpy(prompt, fancy_prompt("Proceed with this action?"),
+		    sizeof(prompt));
+	else if (nremovals > 0)
 		snprintf(prompt, sizeof(prompt),
 		    "\nProceed with this action? "
 		    "(%d package(s) will be REMOVED) ", nremovals);
@@ -1205,7 +1246,15 @@ confirm_jobs_action(struct pkg_jobs *jobs)
 
 	ret = query_yesno(false, prompt);
 
-	if (ret && explicit_removals > 0) {
+	if (ret && explicit_removals > 0 && style_fancy()) {
+		printf("\n%s%s These packages were installed explicitly and "
+		    "removing them makes them disappear until they are "
+		    "installed again:%s %s%s%s\n", S(ST_WARN),
+		    style_glyph(GL_WARN), S(ST_RESET), S(ST_REMOVE),
+		    sb_str(&names), S(ST_RESET));
+		ret = query_yesno(false, "%S",
+		    fancy_prompt("Confirm their removal?"));
+	} else if (ret && explicit_removals > 0) {
 		printf("\n>>> These packages were installed explicitly and "
 		    "removing them makes them disappear until they are "
 		    "installed again: %s\n", sb_str(&names));
@@ -1215,6 +1264,289 @@ confirm_jobs_action(struct pkg_jobs *jobs)
 	sb_fini(&names);
 
 	return (ret);
+}
+
+struct fancy_section {
+	enum style_role role;
+	enum style_glyph glyph;
+	const char *label;
+	const char *count_label;
+};
+
+static const struct fancy_section fancy_sections[PKG_DISPLAY_MAX] = {
+	[PKG_DISPLAY_LOCKED] =
+	    { ST_LOCKED, GL_LOCKED, "Locked", NULL },
+	[PKG_DISPLAY_INSTALL] =
+	    { ST_INSTALL, GL_INSTALL, "Installing", "new" },
+	[PKG_DISPLAY_UPGRADE] =
+	    { ST_UPGRADE, GL_UPGRADE, "Upgrading", "upgraded" },
+	[PKG_DISPLAY_DOWNGRADE] =
+	    { ST_DOWNGRADE, GL_DOWNGRADE, "Downgrading", "downgraded" },
+	[PKG_DISPLAY_REINSTALL] =
+	    { ST_REINSTALL, GL_REINSTALL, "Reinstalling", "reinstalled" },
+	[PKG_DISPLAY_DELETE] =
+	    { ST_REMOVE, GL_REMOVE, "Removing", "removed" },
+	[PKG_DISPLAY_FETCH] =
+	    { ST_FETCH, GL_FETCH, "Fetching", "fetched" },
+	[PKG_DISPLAY_GROUP_INSTALL] =
+	    { ST_GROUP, GL_GROUP, "Installing groups", "new groups" },
+	[PKG_DISPLAY_GROUP_UPGRADE] =
+	    { ST_GROUP, GL_GROUP, "Upgrading groups", "upgraded groups" },
+};
+
+static const char *
+attr_str(struct pkg *p, pkg_attr a)
+{
+	const char *s = NULL;
+
+	if (p != NULL)
+		pkg_get(p, a, &s);
+	return (s != NULL ? s : "");
+}
+
+static bool
+fancy_is_pair(struct pkg_solved_display *it)
+{
+	return (it->old != NULL &&
+	    (it->display_type == PKG_DISPLAY_UPGRADE ||
+	    it->display_type == PKG_DISPLAY_DOWNGRADE ||
+	    it->display_type == PKG_DISPLAY_LOCKED));
+}
+
+/* The version column of a row: a single version or "old → new". */
+static void
+fancy_version(sb_t *sb, struct pkg_solved_display *it, int oldw)
+{
+	const char *nv = attr_str(it->new, PKG_ATTR_VERSION);
+
+	switch (it->display_type) {
+	case PKG_DISPLAY_UPGRADE:
+		style_version_pair(sb, attr_str(it->old, PKG_ATTR_VERSION), nv,
+		    ST_VER_UP_OLD, ST_VER_UP_NEW, oldw);
+		break;
+	case PKG_DISPLAY_DOWNGRADE:
+		style_version_pair(sb, attr_str(it->old, PKG_ATTR_VERSION), nv,
+		    ST_VER_DOWN_OLD, ST_VER_DOWN_NEW, oldw);
+		break;
+	case PKG_DISPLAY_LOCKED:
+		if (it->solved_type == PKG_SOLVED_DELETE ||
+		    it->solved_type == PKG_SOLVED_UPGRADE_REMOVE) {
+			sb_printf(sb, "%s%s%s", S(ST_DIM),
+			    attr_str(it->old, PKG_ATTR_VERSION), S(ST_RESET));
+			break;
+		}
+		style_version_pair(sb, attr_str(it->old, PKG_ATTR_VERSION), nv,
+		    ST_DIM, ST_DIM, oldw);
+		break;
+	case PKG_DISPLAY_DELETE:
+		sb_printf(sb, "%s%s%s", S(ST_VER_UP_OLD), nv, S(ST_RESET));
+		break;
+	default:
+		sb_printf(sb, "%s%s%s", S(ST_VERSION), nv, S(ST_RESET));
+		break;
+	}
+}
+
+static void
+fancy_summary_item(struct pkg_solved_display *it, int namew, int oldw,
+    int verw, int64_t dlsize)
+{
+	sb_t row = sb_init(), ver = sb_init();
+	const char *why = attr_str(it->new, PKG_ATTR_REASON);
+	int64_t pkgsize = 0;
+	char size[8], tlsize[8];
+
+	sb_cat(&row, "    ");
+	sb_printf(&ver, "%s%s%s", S(ST_NAME), attr_str(it->new, PKG_ATTR_NAME),
+	    S(ST_RESET));
+	style_pad(&row, sb_str(&ver), namew + 2);
+
+	sb_reset(&ver);
+	fancy_version(&ver, it, oldw);
+	style_pad(&row, sb_str(&ver), verw + 2);
+	sb_fini(&ver);
+
+	pkg_get(it->new, PKG_ATTR_PKGSIZE, &pkgsize);
+	switch (it->display_type) {
+	case PKG_DISPLAY_LOCKED:
+		sb_printf(&row, "%s%s locked", S(ST_LOCKED),
+		    style_glyph(GL_LOCKED));
+		if (it->solved_type == PKG_SOLVED_DELETE ||
+		    it->solved_type == PKG_SOLVED_UPGRADE_REMOVE)
+			sb_cat(&row, ", may not be deinstalled");
+		else if (it->solved_type == PKG_SOLVED_FETCH)
+			sb_cat(&row, ", new package can still be fetched");
+		else
+			sb_cat(&row, ", may not be changed");
+		sb_cat(&row, S(ST_RESET));
+		break;
+	case PKG_DISPLAY_DELETE:
+		if (*why != '\0')
+			sb_printf(&row, "%s%s%s", S(ST_DIM), why, S(ST_RESET));
+		break;
+	case PKG_DISPLAY_FETCH:
+		humanize_number(size, sizeof(size), pkgsize, "B",
+		    HN_AUTOSCALE, HN_IEC_PREFIXES | HN_DECIMAL);
+		humanize_number(tlsize, sizeof(tlsize), dlsize, "B",
+		    HN_AUTOSCALE, HN_IEC_PREFIXES | HN_DECIMAL);
+		sb_printf(&row, "%s%9s  %4.1f%% of %s%s", S(ST_DIM), size,
+		    dlsize > 0 ? (100.0 * pkgsize) / dlsize : 0.0, tlsize,
+		    S(ST_RESET));
+		break;
+	case PKG_DISPLAY_GROUP_INSTALL:
+	case PKG_DISPLAY_GROUP_UPGRADE:
+		break;
+	default:
+		humanize_number(size, sizeof(size), pkgsize, "B",
+		    HN_AUTOSCALE, HN_IEC_PREFIXES | HN_DECIMAL);
+		sb_printf(&row, "%s%9s%s", S(ST_DIM), size, S(ST_RESET));
+		if (it->display_type == PKG_DISPLAY_REINSTALL && *why != '\0')
+			sb_printf(&row, "  %s%s%s", S(ST_DIM), why,
+			    S(ST_RESET));
+		break;
+	}
+
+	if (pkg_repos_total_count() > 1 &&
+	    it->display_type != PKG_DISPLAY_DELETE &&
+	    it->display_type != PKG_DISPLAY_LOCKED)
+		sb_printf(&row, "  %s[%s]%s", S(ST_REPO),
+		    attr_str(it->new, PKG_ATTR_REPONAME), S(ST_RESET));
+	if (it->vulnerable)
+		sb_printf(&row, "  %s%s vulnerable%s", S(ST_ERROR),
+		    style_glyph(GL_WARN), S(ST_RESET));
+
+	/* Trim the padding we may have left at the end of the row. */
+	while (row.len > 0 && row.d[row.len - 1] == ' ')
+		row.d[--row.len] = '\0';
+	printf("%s\n", sb_str(&row));
+	sb_fini(&row);
+}
+
+static void
+fancy_size_line(int64_t oldsize, int64_t newsize, int64_t dlsize)
+{
+	char size[8];
+	bool sep = false;
+
+	if (newsize == oldsize && dlsize <= 0)
+		return;
+	printf("  ");
+	if (newsize != oldsize) {
+		humanize_number(size, sizeof(size), llabs(newsize - oldsize),
+		    "B", HN_AUTOSCALE, HN_IEC_PREFIXES | HN_DECIMAL);
+		printf("%sDisk%s %s%s%s%s", S(ST_DIM), S(ST_RESET),
+		    newsize > oldsize ? S(ST_WARN) : S(ST_OK),
+		    newsize > oldsize ? "+" : "-", size, S(ST_RESET));
+		sep = true;
+	}
+	if (dlsize > 0) {
+		humanize_number(size, sizeof(size), dlsize, "B",
+		    HN_AUTOSCALE, HN_IEC_PREFIXES | HN_DECIMAL);
+		printf("%s%sDownload%s %s%s%s", sep ? "    " : "", S(ST_DIM),
+		    S(ST_RESET), S(ST_FETCH), size, S(ST_RESET));
+	}
+	putchar('\n');
+}
+
+static int
+print_jobs_summary_fancy(pkg_solved_display_t *disp, const char *title,
+    int64_t oldsize, int64_t newsize, int64_t dlsize, int vuln_count)
+{
+	const struct fancy_section *sec;
+	struct pkg_solved_display *it;
+	int namew = 0, oldw = 0, neww = 0, verw = 0, rulew, w;
+	int type, displayed = 0;
+	bool first = true;
+
+	/* Shared columns for every section, so the whole summary lines up. */
+	for (type = 0; type < PKG_DISPLAY_MAX; type++) {
+		vec_foreach(disp[type], i) {
+			it = disp[type].d[i];
+			w = strlen(attr_str(it->new, PKG_ATTR_NAME));
+			if (w > namew)
+				namew = w;
+			if (fancy_is_pair(it)) {
+				w = strlen(attr_str(it->old, PKG_ATTR_VERSION));
+				if (w > oldw)
+					oldw = w;
+				w = strlen(attr_str(it->new, PKG_ATTR_VERSION));
+				if (w > neww)
+					neww = w;
+			}
+		}
+	}
+	if (neww > 0)
+		verw = oldw + 2 + style_width(style_glyph(GL_ARROW)) + neww;
+	for (type = 0; type < PKG_DISPLAY_MAX; type++) {
+		vec_foreach(disp[type], i) {
+			it = disp[type].d[i];
+			if (fancy_is_pair(it))
+				continue;
+			w = strlen(attr_str(it->new, PKG_ATTR_VERSION));
+			if (w > verw)
+				verw = w;
+		}
+	}
+
+	rulew = 4 + namew + 2 + verw + 2 + 9;
+	if (title != NULL && (int)style_width(title) + 2 > rulew)
+		rulew = style_width(title) + 2;
+	if (rulew > style_term_cols())
+		rulew = style_term_cols();
+
+	if (title != NULL) {
+		printf("%s%s%s %s%s\n", S(ST_ACCENT), style_glyph(GL_PROMPT),
+		    S(ST_BOLD), title, S(ST_RESET));
+		style_rule(stdout, rulew);
+	}
+
+	for (type = 0; type < PKG_DISPLAY_MAX; type++) {
+		if (disp[type].len == 0)
+			continue;
+		sec = &fancy_sections[type];
+		if (!first || title != NULL)
+			putchar('\n');
+		first = false;
+		printf("%s%s %s%s %s%zu%s\n", S(sec->role),
+		    style_glyph(sec->glyph), sec->label, S(ST_RESET),
+		    S(ST_DIM), disp[type].len, S(ST_RESET));
+		qsort(disp[type].d, disp[type].len, sizeof(disp[type].d[0]),
+		    namecmp);
+		vec_foreach(disp[type], i) {
+			fancy_summary_item(disp[type].d[i], namew, oldw, verw,
+			    dlsize);
+			displayed++;
+		}
+	}
+
+	putchar('\n');
+	style_rule(stdout, rulew);
+	printf(" ");
+	first = true;
+	for (type = 0; type < PKG_DISPLAY_MAX; type++) {
+		sec = &fancy_sections[type];
+		if (disp[type].len == 0 || sec->count_label == NULL)
+			continue;
+		if (!first)
+			printf(" %s%s%s", S(ST_DIM), style_glyph(GL_DOT),
+			    S(ST_RESET));
+		printf(" %s%zu%s %s", S(sec->role), disp[type].len,
+		    S(ST_RESET), sec->count_label);
+		first = false;
+	}
+	putchar('\n');
+
+	fancy_size_line(oldsize, newsize, dlsize);
+
+	if (vuln_count > 0)
+		printf("\n%s%s %d package(s) have known vulnerabilities%s\n",
+		    S(ST_ERROR), style_glyph(GL_WARN), vuln_count,
+		    S(ST_RESET));
+
+	for (type = 0; type < PKG_DISPLAY_MAX; type++)
+		vec_free_and_free(&disp[type], free);
+
+	return (displayed);
 }
 
 int
@@ -1262,6 +1594,27 @@ print_jobs_summary(struct pkg_jobs *jobs, const char *msg, ...)
 			}
 		}
 		hash_destroy(vulnerable);
+	}
+
+	if (style_fancy()) {
+		char *title = NULL;
+
+		if (msg != NULL) {
+			va_start(ap, msg);
+			if (vasprintf(&title, msg, ap) < 0)
+				title = NULL;
+			va_end(ap);
+		}
+		if (title != NULL) {
+			size_t l = strlen(title);
+			while (l > 0 && (title[l - 1] == '\n' ||
+			    title[l - 1] == ':' || title[l - 1] == ' '))
+				title[--l] = '\0';
+		}
+		displayed = print_jobs_summary_fancy(disp, title, oldsize,
+		    newsize, dlsize, vuln_count);
+		free(title);
+		return (displayed);
 	}
 
 	for (type = 0; type < PKG_DISPLAY_MAX; type ++) {

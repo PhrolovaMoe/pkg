@@ -92,6 +92,64 @@ static const char *unit_SI[] = { " ", "k", "M", "G", "T", };
 
 static void draw_progressbar(int64_t current, int64_t total);
 
+/* "✚ Installing" style action verb for the fancy output. */
+static void
+fancy_verb(sb_t *msg, enum style_role r, enum style_glyph g, const char *verb)
+{
+	sb_printf(msg, "%s%s %s%s ", S(r), style_glyph(g), verb, S(ST_RESET));
+}
+
+/* A step that belongs to the action line above it, e.g. extraction. */
+static void
+fancy_substep(sb_t *msg, const char *verb)
+{
+	sb_printf(msg, "%s%s %s%s ", S(ST_DIM), style_glyph(GL_EXTRACT), verb,
+	    S(ST_RESET));
+}
+
+static void
+fancy_namever(sb_t *msg, const char *n, const char *v)
+{
+	sb_printf(msg, "%s%s%s %s%s%s", S(ST_NAME), n, S(ST_RESET),
+	    S(ST_VERSION), v, S(ST_RESET));
+}
+
+/* Redraw the current progress line as "message  ━━━━━━╸━━━  42%". */
+static void
+fancy_bar(int percent, bool debit)
+{
+	int cols, msgw, pad, width, halves, i;
+
+	cols = style_term_cols();
+	msgw = style_width(progress_message);
+	pad = cols / 2 < 46 ? cols / 2 : 46;
+	if (msgw > pad)
+		pad = msgw;
+	width = cols - pad - 2 - 5 - (debit ? 32 : 0) - 1;
+	if (width > 36)
+		width = 36;
+
+	printf("\r%s", progress_message);
+	for (i = msgw; i < pad; i++)
+		putchar(' ');
+	if (width >= 8) {
+		halves = percent * width * 2 / 100;
+		printf("  %s", percent >= 100 ? S(ST_OK) : S(ST_BAR_DONE));
+		for (i = 0; i < halves / 2; i++)
+			fputs(style_glyph(GL_BAR_FULL), stdout);
+		if (halves % 2) {
+			fputs(style_glyph(GL_BAR_HALF), stdout);
+			i++;
+		}
+		printf("%s", S(ST_BAR_TODO));
+		for (; i < width; i++)
+			fputs(style_glyph(GL_BAR_EMPTY), stdout);
+		printf("%s", S(ST_RESET));
+	}
+	printf(" %s%3d%%%s", percent >= 100 ? S(ST_OK) : S(ST_BOLD), percent,
+	    S(ST_RESET));
+}
+
 static void
 cleanup_handler(int sig)
 {
@@ -195,7 +253,8 @@ job_status_begin(sb_t *msg)
 	if ((nbtodl > 0 || nbactions > 0) && nbdone > 0) {
 		if (nbdigits == 0)
 			nbdigits = count_digits(nbtodl ? nbtodl : nbactions);
-		sb_printf(msg, "[%*zu/%zu] ", (int)nbdigits, nbdone, (nbtodl) ? nbtodl : nbactions);
+		sb_printf(msg, "%s[%*zu/%zu]%s ", S(ST_DIM), (int)nbdigits,
+		    nbdone, (nbtodl) ? nbtodl : nbactions, S(ST_RESET));
 	}
 	if (nbtodl > 0 && nbtodl == nbdone) {
 		nbtodl = 0;
@@ -229,7 +288,10 @@ progressbar_start(const char *pmsg)
 	progress_interrupted = false;
 	if (!isatty(STDOUT_FILENO))
 		printf("%s: ", progress_message);
-	else
+	else if (style_fancy()) {
+		fancy_bar(0, progress_debit);
+		fflush(stdout);
+	} else
 		printf("%s:   0%%", progress_message);
 }
 
@@ -306,7 +368,12 @@ draw_progressbar(int64_t current, int64_t total)
 	    (percent != last_progress_percent || progress_interrupted))) {
 		last_progress_percent = percent;
 
-		printf("\r%s: %3d%%", progress_message, percent);
+		if (style_fancy())
+			fancy_bar(percent, progress_debit);
+		else
+			printf("\r%s: %3d%%", progress_message, percent);
+		if (progress_debit && style_fancy())
+			printf("%s", S(ST_DIM));
 		if (progress_debit) {
 			transferred = current - last_tick;
 			last_tick = current;
@@ -383,6 +450,8 @@ draw_progressbar(int64_t current, int64_t total)
 			}
 			last_update = now;
 		}
+		if (style_fancy())
+			printf("%s\033[K", S(ST_RESET));
 		fflush(stdout);
 	}
 	if (current >= total)
@@ -402,15 +471,26 @@ typedef int (*event_handler_fn)(struct pkg_event *ev, int *debug);
 static int
 event_cb_errno(struct pkg_event *ev, int *debug __unused)
 {
-	warnx("%s(%s): %s", ev->e_errno.func, ev->e_errno.arg,
-	    strerror(ev->e_errno.no));
+	if (style_fancy_stderr())
+		fprintf(stderr, "%s%s%s %s%s:%s %s(%s): %s\n", SE(ST_ERROR),
+		    style_glyph(GL_ERROR), SE(ST_RESET), SE(ST_DIM),
+		    getprogname(), SE(ST_RESET), ev->e_errno.func,
+		    ev->e_errno.arg, strerror(ev->e_errno.no));
+	else
+		warnx("%s(%s): %s", ev->e_errno.func, ev->e_errno.arg,
+		    strerror(ev->e_errno.no));
 	return (0);
 }
 
 static int
 event_cb_error(struct pkg_event *ev, int *debug __unused)
 {
-	warnx("%s", ev->e_pkg_error.msg);
+	if (style_fancy_stderr())
+		fprintf(stderr, "%s%s%s %s%s:%s %s\n", SE(ST_ERROR),
+		    style_glyph(GL_ERROR), SE(ST_RESET), SE(ST_DIM),
+		    getprogname(), SE(ST_RESET), ev->e_pkg_error.msg);
+	else
+		warnx("%s", ev->e_pkg_error.msg);
 	return (0);
 }
 
@@ -473,7 +553,18 @@ event_cb_fetch_begin(struct pkg_event *ev, int *debug __unused)
 	job_status_begin(&msg_buf);
 	progress_debit = true;
 	tmp = strrchr(filename, '~');
-	if (tmp != NULL)
+	if (style_fancy()) {
+		int len = strlen(filename);
+
+		if (tmp != NULL)
+			len = tmp - filename;
+		else if ((tmp = strrchr(filename, '.')) != NULL &&
+		    strcmp(tmp, ".pkg") == 0)
+			len = tmp - filename;
+		fancy_verb(&msg_buf, ST_FETCH, GL_FETCH, "Fetching");
+		sb_printf(&msg_buf, "%s%.*s%s", S(ST_NAME), len, filename,
+		    S(ST_RESET));
+	} else if (tmp != NULL)
 		sb_printf(&msg_buf, "Fetching %.*s",
 				(int)(tmp - filename), filename);
 	else {
@@ -509,7 +600,12 @@ event_cb_install_begin(struct pkg_event *ev, int *debug __unused)
 	pkg_get(pkg, PKG_ATTR_NAME, &n);
 	pkg_get(pkg, PKG_ATTR_VERSION, &v);
 
-	sb_printf(&msg_buf, "Installing %s-%s...\n", n, v);
+	if (style_fancy()) {
+		fancy_verb(&msg_buf, ST_INSTALL, GL_INSTALL, "Installing");
+		fancy_namever(&msg_buf, n, v);
+		sb_cat_c(&msg_buf, '\n');
+	} else
+		sb_printf(&msg_buf, "Installing %s-%s...\n", n, v);
 
 	printf("%s",sb_str(&msg_buf));
 	return (0);
@@ -527,7 +623,11 @@ event_cb_extract_begin(struct pkg_event *ev, int *debug __unused)
 	pkg = ev->e_install_begin.pkg;
 	pkg_get(pkg, PKG_ATTR_NAME, &n);
 	pkg_get(pkg, PKG_ATTR_VERSION, &v);
-	sb_printf(&msg_buf, "Extracting %s-%s", n, v);
+	if (style_fancy()) {
+		fancy_substep(&msg_buf, "Extracting");
+		fancy_namever(&msg_buf, n, v);
+	} else
+		sb_printf(&msg_buf, "Extracting %s-%s", n, v);
 
 	return (0);
 }
@@ -560,7 +660,16 @@ event_cb_integritycheck_finished(struct pkg_event *ev, int *debug __unused)
 {
 	if (quiet)
 		return (0);
-	printf(" done (%d conflicting)\n", ev->e_integrity_finished.conflicting);
+	if (style_fancy() && ev->e_integrity_finished.conflicting == 0)
+		printf(" %s%s%s %sno conflicts%s\n", S(ST_OK),
+		    style_glyph(GL_OK), S(ST_RESET), S(ST_DIM), S(ST_RESET));
+	else if (style_fancy())
+		printf(" %s%s %d conflicting%s\n", S(ST_WARN),
+		    style_glyph(GL_WARN), ev->e_integrity_finished.conflicting,
+		    S(ST_RESET));
+	else
+		printf(" done (%d conflicting)\n",
+		    ev->e_integrity_finished.conflicting);
 	if (conflicts.len != 0) {
 		char *c = sb_get(&conflicts);
 		printf("%s", c);
@@ -606,7 +715,12 @@ event_cb_deinstall_begin(struct pkg_event *ev, int *debug __unused)
 	pkg = ev->e_install_begin.pkg;
 	pkg_get(pkg, PKG_ATTR_NAME, &n);
 	pkg_get(pkg, PKG_ATTR_VERSION, &v);
-	sb_printf(&msg_buf, "Deinstalling %s-%s...\n", n, v);
+	if (style_fancy()) {
+		fancy_verb(&msg_buf, ST_REMOVE, GL_REMOVE, "Deinstalling");
+		fancy_namever(&msg_buf, n, v);
+		sb_cat_c(&msg_buf, '\n');
+	} else
+		sb_printf(&msg_buf, "Deinstalling %s-%s...\n", n, v);
 
 	printf("%s", sb_str(&msg_buf));
 	return (0);
@@ -624,7 +738,11 @@ event_cb_delete_files_begin(struct pkg_event *ev, int *debug __unused)
 	pkg = ev->e_install_begin.pkg;
 	pkg_get(pkg, PKG_ATTR_NAME, &n);
 	pkg_get(pkg, PKG_ATTR_VERSION, &v);
-	sb_printf(&msg_buf, "Deleting files for %s-%s", n, v);
+	if (style_fancy()) {
+		fancy_substep(&msg_buf, "Deleting files for");
+		fancy_namever(&msg_buf, n, v);
+	} else
+		sb_printf(&msg_buf, "Deleting files for %s-%s", n, v);
 	return (0);
 }
 
@@ -644,7 +762,32 @@ event_cb_upgrade_begin(struct pkg_event *ev, int *debug __unused)
 	pkg_get(pkg_new, PKG_ATTR_NAME, &n);
 	pkg_get(pkg_new, PKG_ATTR_VERSION, &v);
 	pkg_get(pkg_old, PKG_ATTR_VERSION, &ov);
-	switch (pkg_version_change_between(pkg_new, pkg_old)) {
+	if (style_fancy()) {
+		switch (pkg_version_change_between(pkg_new, pkg_old)) {
+		case PKG_DOWNGRADE:
+			fancy_verb(&msg_buf, ST_DOWNGRADE, GL_DOWNGRADE,
+			    "Downgrading");
+			sb_printf(&msg_buf, "%s%s%s ", S(ST_NAME), n,
+			    S(ST_RESET));
+			style_version_pair(&msg_buf, ov, v, ST_VER_DOWN_OLD,
+			    ST_VER_DOWN_NEW, 0);
+			break;
+		case PKG_REINSTALL:
+			fancy_verb(&msg_buf, ST_REINSTALL, GL_REINSTALL,
+			    "Reinstalling");
+			fancy_namever(&msg_buf, n, v);
+			break;
+		case PKG_UPGRADE:
+			fancy_verb(&msg_buf, ST_UPGRADE, GL_UPGRADE,
+			    "Upgrading");
+			sb_printf(&msg_buf, "%s%s%s ", S(ST_NAME), n,
+			    S(ST_RESET));
+			style_version_pair(&msg_buf, ov, v, ST_VER_UP_OLD,
+			    ST_VER_UP_NEW, 0);
+			break;
+		}
+		sb_cat_c(&msg_buf, '\n');
+	} else switch (pkg_version_change_between(pkg_new, pkg_old)) {
 	case PKG_DOWNGRADE:
 		sb_printf(&msg_buf, "Downgrading %s from %s to %s...\n",
 		    n, ov, v);

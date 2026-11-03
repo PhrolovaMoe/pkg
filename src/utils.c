@@ -414,6 +414,159 @@ print_depinfo(struct pkgdb *db, struct pkg *pkg, bool print_tag,
 	pkgbase_free(pb);
 }
 
+/*
+ * Dependency trees for pkg info -d / -r on a terminal.  Installed
+ * packages are expanded recursively through the local database; a package
+ * already shown higher up is printed once more with "(*)" and not expanded
+ * again, which also keeps cycles finite.
+ */
+#define DEP_TREE_MAXDEPTH	64
+
+struct dep_tree {
+	struct pkgdb	*db;
+	hash_t		*seen;
+	bool		 reverse;
+	bool		 show_locks;
+	int		 unique;
+	int		 repeats;
+	int		 missing;
+};
+
+struct dep_node {
+	const char	*name;
+	const char	*version;
+	bool		 locked;
+};
+
+static int
+dep_node_cmp(const void *a, const void *b)
+{
+	return (strcmp(((const struct dep_node *)a)->name,
+	    ((const struct dep_node *)b)->name));
+}
+
+static void
+dep_tree_children(struct dep_tree *t, struct pkg *pkg, sb_t *prefix,
+    int depth)
+{
+	struct pkg_dep *dep = NULL;
+	struct dep_node *nodes;
+	struct pkgdb_it *it;
+	struct pkg *child;
+	size_t n = 0, cap, plen;
+	const char *v;
+	bool last, found, locked;
+
+	cap = pkg_list_count(pkg, t->reverse ? PKG_RDEPS : PKG_DEPS);
+	if (cap == 0)
+		return;
+	nodes = xcalloc(cap, sizeof(*nodes));
+	while (n < cap && (t->reverse ? pkg_rdeps(pkg, &dep) :
+	    pkg_deps(pkg, &dep)) == EPKG_OK) {
+		nodes[n].name = pkg_dep_name(dep);
+		nodes[n].version = pkg_dep_version(dep);
+		nodes[n].locked = pkg_dep_is_locked(dep);
+		n++;
+	}
+	qsort(nodes, n, sizeof(*nodes), dep_node_cmp);
+
+	for (size_t i = 0; i < n; i++) {
+		last = (i == n - 1);
+		child = NULL;
+		it = NULL;
+		found = false;
+		v = nodes[i].version;
+		locked = nodes[i].locked;
+		if (t->db != NULL) {
+			it = pkgdb_query(t->db, nodes[i].name, MATCH_EXACT);
+			if (it != NULL && pkgdb_it_next(it, &child, PKG_LOAD_BASIC |
+			    (t->reverse ? PKG_LOAD_RDEPS : PKG_LOAD_DEPS)) ==
+			    EPKG_OK) {
+				found = true;
+				pkg_get(child, PKG_ATTR_VERSION, &v);
+				pkg_get(child, PKG_ATTR_LOCKED, &locked);
+			}
+		}
+
+		printf("%s%s%s%s%s", S(ST_DIM), sb_str(prefix),
+		    style_glyph(last ? GL_TREE_LAST : GL_TREE_MID),
+		    style_glyph(GL_BOX_H), S(ST_RESET));
+		printf(" %s%s%s", S(ST_NAME), nodes[i].name, S(ST_RESET));
+		if (v != NULL && *v != '\0')
+			printf("%s-%s%s%s%s", S(ST_DIM), S(ST_RESET),
+			    found || t->db == NULL ? S(ST_VERSION) : S(ST_DIM),
+			    v, S(ST_RESET));
+		if (t->show_locks && locked)
+			printf(" %s%s locked%s", S(ST_LOCKED),
+			    style_glyph(GL_LOCKED), S(ST_RESET));
+
+		if (t->db != NULL && !found) {
+			printf(" %s%s not installed%s\n", S(ST_ERROR),
+			    style_glyph(GL_ERROR), S(ST_RESET));
+			t->missing++;
+		} else if (t->db != NULL &&
+		    hash_get(t->seen, nodes[i].name) != NULL) {
+			printf(" %s(*)%s\n", S(ST_DIM), S(ST_RESET));
+			t->repeats++;
+		} else {
+			putchar('\n');
+			t->unique++;
+			if (t->db != NULL && depth < DEP_TREE_MAXDEPTH) {
+				hash_safe_add(t->seen, nodes[i].name, NULL,
+				    NULL);
+				plen = prefix->len;
+				sb_cat(prefix, last ? "   " :
+				    style_glyph(GL_TREE_PIPE));
+				if (!last)
+					sb_cat(prefix, "  ");
+				dep_tree_children(t, child, prefix, depth + 1);
+				prefix->len = plen;
+				prefix->d[plen] = '\0';
+			}
+		}
+		pkg_free(child);
+		pkgdb_it_free(it);
+	}
+	free(nodes);
+}
+
+static void
+print_dep_tree(struct pkgdb *db, struct pkg *pkg, bool reverse,
+    bool show_locks)
+{
+	struct dep_tree t = { 0 };
+	sb_t prefix = sb_init();
+	const char *name = NULL;
+
+	/* Only installed packages can be followed through the local db. */
+	t.db = pkg_type(pkg) == PKG_INSTALLED ? db : NULL;
+	t.reverse = reverse;
+	t.show_locks = show_locks;
+	t.seen = hash_new();
+	pkg_get(pkg, PKG_ATTR_NAME, &name);
+	if (name != NULL)
+		hash_safe_add(t.seen, name, NULL, NULL);
+
+	sb_cat(&prefix, "  ");
+	dep_tree_children(&t, pkg, &prefix, 0);
+	sb_fini(&prefix);
+
+	if (t.db != NULL) {
+		printf("  %s%d package%s", S(ST_DIM), t.unique,
+		    t.unique == 1 ? "" : "s");
+		if (t.repeats > 0)
+			printf(" %s (*) %d shown above", style_glyph(GL_DOT),
+			    t.repeats);
+		printf("%s", S(ST_RESET));
+		if (t.missing > 0)
+			printf(" %s%s%s %s%d not installed%s",
+			    S(ST_DIM), style_glyph(GL_DOT), S(ST_RESET),
+			    S(ST_ERROR), t.missing, S(ST_RESET));
+		putchar('\n');
+	}
+	hash_destroy(t.seen);
+}
+
 void
 print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 {
@@ -708,7 +861,16 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 				pkg_printf("%M\n", pkg);
 			break;
 		case INFO_DEPS:
-			if (pkg_list_count(pkg, PKG_DEPS) > 0) {
+			if (style_fancy() && !quiet) {
+				if (pkg_list_count(pkg, PKG_DEPS) > 0) {
+					if (print_tag)
+						info_label("Depends on", true);
+					print_dep_tree(db, pkg, false,
+					    show_locks);
+				} else if (!print_tag)
+					printf("  %s(no dependencies)%s\n",
+					    S(ST_DIM), S(ST_RESET));
+			} else if (pkg_list_count(pkg, PKG_DEPS) > 0) {
 				if (print_tag)
 					info_label("Depends on", true);
 				if (quiet) {
@@ -731,7 +893,16 @@ print_info(struct pkgdb *db, struct pkg * const pkg, uint64_t options)
 				    pkgdb_query_provide);
 			break;
 		case INFO_RDEPS:
-			if (pkg_list_count(pkg, PKG_RDEPS) > 0) {
+			if (style_fancy() && !quiet) {
+				if (pkg_list_count(pkg, PKG_RDEPS) > 0) {
+					if (print_tag)
+						info_label("Required by", true);
+					print_dep_tree(db, pkg, true,
+					    show_locks);
+				} else if (!print_tag)
+					printf("  %s(nothing requires it)%s\n",
+					    S(ST_DIM), S(ST_RESET));
+			} else if (pkg_list_count(pkg, PKG_RDEPS) > 0) {
 				if (print_tag)
 					info_label("Required by", true);
 				if (quiet) {

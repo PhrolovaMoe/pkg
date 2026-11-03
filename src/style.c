@@ -81,6 +81,9 @@ static const char *glyphs_utf8[GL_MAX] = {
 	[GL_BOX_V]	= "│",
 	[GL_BOX_SEP]	= "├",
 	[GL_BOX_DASH]	= "╌",
+	[GL_TREE_MID]	= "├",
+	[GL_TREE_LAST]	= "╰",
+	[GL_TREE_PIPE]	= "│",
 };
 
 static const char *glyphs_ascii[GL_MAX] = {
@@ -112,6 +115,9 @@ static const char *glyphs_ascii[GL_MAX] = {
 	[GL_BOX_V]	= "|",
 	[GL_BOX_SEP]	= "|",
 	[GL_BOX_DASH]	= "-",
+	[GL_TREE_MID]	= "|",
+	[GL_TREE_LAST]	= "`",
+	[GL_TREE_PIPE]	= "|",
 };
 
 static bool

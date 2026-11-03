@@ -74,6 +74,9 @@ enum style_glyph {
 	GL_BOX_V,
 	GL_BOX_SEP,
 	GL_BOX_DASH,
+	GL_TREE_MID,
+	GL_TREE_LAST,
+	GL_TREE_PIPE,
 	GL_MAX
 };
 

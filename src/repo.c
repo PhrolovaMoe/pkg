@@ -38,9 +38,9 @@
 void
 usage_repo(void)
 {
-	fprintf(stderr, "Usage: pkg repo [-hlqs] [-m metafile] [-o output-dir] "
+	usage_printf("Usage: pkg repo [-hlqs] [-m metafile] [-o output-dir] "
                         "[-t <keytype> [-k keyfile | -c cmd]] <repo-path>\n\n");
-	fprintf(stderr, "For more information see 'pkg help repo'.\n");
+	usage_printf("For more information see 'pkg help repo'.\n");
 }
 
 int

@@ -64,9 +64,9 @@ typedef enum {
 void
 usage_key(void)
 {
-	fprintf(stderr, "Usage: pkg key [--create | --public | --sign] [-t <type>] "
+	usage_printf("Usage: pkg key [--create | --public | --sign] [-t <type>] "
 	    "<key-path>\n");
-	fprintf(stderr, "For more information see 'pkg help key'.\n");
+	usage_printf("For more information see 'pkg help key'.\n");
 }
 
 static int

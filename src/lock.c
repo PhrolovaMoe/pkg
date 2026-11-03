@@ -22,10 +22,10 @@ static int do_unlock(struct pkgdb *db, struct pkg *pkg, bool batch);
 void
 usage_lock(void)
 {
-	fprintf(stderr, "Usage: pkg lock [-lqy] [-a|[-Cgix] <pkg-name>]\n");
-	fprintf(stderr, "       pkg lock --has-locked-packages\n");
-	fprintf(stderr, "       pkg unlock [-lqy] [-a|[-Cgix] <pkg-name>]\n");
-	fprintf(stderr, "For more information see 'pkg help lock'.\n");
+	usage_printf("Usage: pkg lock [-lqy] [-a|[-Cgix] <pkg-name>]\n");
+	usage_printf("       pkg lock --has-locked-packages\n");
+	usage_printf("       pkg unlock [-lqy] [-a|[-Cgix] <pkg-name>]\n");
+	usage_printf("For more information see 'pkg help lock'.\n");
 }
 
 static int

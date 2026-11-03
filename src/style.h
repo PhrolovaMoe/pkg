@@ -96,5 +96,12 @@ void		 style_rule(FILE *, int width);
 void		 style_version_pair(sb_t *, const char *oldv, const char *newv,
 		    enum style_role oldr, enum style_role newr, int oldpad);
 void		 style_pad(sb_t *, const char *s, size_t width);
+/*
+ * fprintf(stderr, ...) for usage text, with the synopsis colored.  Returns
+ * the number of characters of text, escapes not counted, like fprintf.
+ */
+int		 usage_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+/* Color one line of usage synopsis onto f (no styling when off). */
+void		 style_usage_line(FILE *f, const char *line, bool on);
 
 #endif

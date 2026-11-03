@@ -43,8 +43,8 @@
 void
 usage_shlib(void)
 {
-	fprintf(stderr, "Usage: pkg shlib [-q] [-P|R] <library>\n\n");
-	fprintf(stderr, "For more information see 'pkg help shlib'.\n");
+	usage_printf("Usage: pkg shlib [-q] [-P|R] <library>\n\n");
+	usage_printf("For more information see 'pkg help shlib'.\n");
 }
 
 char *

@@ -34,15 +34,15 @@
 void
 usage_create(void)
 {
-	fprintf(stderr, "Usage: pkg create [-ehnqv] [-f format] [-l level] "
+	usage_printf("Usage: pkg create [-ehnqv] [-f format] [-l level] "
 		"[-o outdir] [-p plist] [-r rootdir] [-t timestamp] [-T threads] -m metadatadir\n");
-	fprintf(stderr, "Usage: pkg create [-ehnqv] [-f format] [-l level] "
+	usage_printf("Usage: pkg create [-ehnqv] [-f format] [-l level] "
 		"[-o outdir] [-r rootdir] [-t timestamp] [-T threads] -M manifest\n");
-	fprintf(stderr, "       pkg create [-eghnqvx] [-f format] [-l level] "
+	usage_printf("       pkg create [-eghnqvx] [-f format] [-l level] "
 		"[-o outdir] [-r rootdir] [-t timestamp] [-T threads] pkg-name ...\n");
-	fprintf(stderr, "       pkg create [-ehnqv] [-f format] [-l level] "
+	usage_printf("       pkg create [-ehnqv] [-f format] [-l level] "
 		"[-o outdir] [-r rootdir] [-t timestamp] [-T threads] -a\n\n");
-	fprintf(stderr, "For more information see 'pkg help create'.\n");
+	usage_printf("For more information see 'pkg help create'.\n");
 }
 
 static int

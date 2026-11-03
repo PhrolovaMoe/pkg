@@ -222,11 +222,9 @@ check_summary(struct pkgdb *db, charv_t *dh)
 void
 usage_check(void)
 {
-	fprintf(stderr,
-	    "Usage: pkg check -d[n]|-s [-qvy] -a\n");
-	fprintf(stderr,
-	    "       pkg check -d[n]|-s [-qvy] [-Cgix] <pattern>\n\n");
-	fprintf(stderr, "For more information see 'pkg help check'.\n");
+	usage_printf("Usage: pkg check -d[n]|-s [-qvy] -a\n");
+	usage_printf("       pkg check -d[n]|-s [-qvy] [-Cgix] <pattern>\n\n");
+	usage_printf("For more information see 'pkg help check'.\n");
 }
 
 int

@@ -49,8 +49,8 @@
 void
 usage_stats(void)
 {
-	fprintf(stderr, "Usage: pkg stats [-qlrb]\n\n");
-	fprintf(stderr, "For more information see 'pkg help stats'.\n");
+	usage_printf("Usage: pkg stats [-qlrb]\n\n");
+	usage_printf("For more information see 'pkg help stats'.\n");
 }
 
 int

@@ -310,8 +310,8 @@ recursive_analysis(int fd, struct pkgdb *db, const char *dir,
 void
 usage_clean(void)
 {
-	fprintf(stderr, "Usage: pkg clean [-anqy]\n\n");
-	fprintf(stderr, "For more information see 'pkg help clean'.\n");
+	usage_printf("Usage: pkg clean [-anqy]\n\n");
+	usage_printf("For more information see 'pkg help clean'.\n");
 }
 
 int

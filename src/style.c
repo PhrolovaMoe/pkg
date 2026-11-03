@@ -9,6 +9,7 @@
 #include <sys/ioctl.h>
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -294,4 +295,119 @@ style_version_pair(sb_t *sb, const char *oldv, const char *newv,
 	sb_printf(sb, " %s%s%s ", S(ST_DIM), style_glyph(GL_ARROW),
 	    S(ST_RESET));
 	emphasized(sb, newv, pfx, newr);
+}
+
+/*
+ * Usage synopses: "Usage:" and the "pkg <command>" it introduces are
+ * emphasized, flags are cyan, <placeholders> yellow and the [ ] | grammar
+ * dimmed.  The "For more information" hint is dimmed as a whole.
+ */
+void
+style_usage_line(FILE *f, const char *line, bool on)
+{
+	const char *p = line, *q;
+	bool word_start = true, cmd_done = false;
+
+	if (!on) {
+		fputs(line, f);
+		return;
+	}
+	if (strncmp(line, "For more information", 20) == 0) {
+		q = strchr(line, '\'');
+		if (q != NULL && strchr(q + 1, '\'') != NULL) {
+			const char *e = strchr(q + 1, '\'');
+			fprintf(f, "%s%.*s%s%s%.*s%s%s%s", codes[ST_DIM],
+			    (int)(q - line + 1), line, codes[ST_RESET],
+			    codes[ST_BOLD], (int)(e - q - 1), q + 1,
+			    codes[ST_RESET], codes[ST_DIM], e);
+			fputs(codes[ST_RESET], f);
+		} else
+			fprintf(f, "%s%s%s", codes[ST_DIM], line,
+			    codes[ST_RESET]);
+		return;
+	}
+	while (*p != '\0') {
+		if (strncmp(p, "Usage:", 6) == 0) {
+			fprintf(f, "%sUsage:%s", codes[ST_ACCENT], codes[ST_RESET]);
+			p += 6;
+			continue;
+		}
+		if (word_start && !cmd_done && strncmp(p, "pkg ", 4) == 0) {
+			/* "pkg" and the command word after it. */
+			q = p + 4;
+			while (*q != '\0' && (islower((unsigned char)*q) ||
+			    *q == '-'))
+				q++;
+			if (q > p + 4 && q[-1] != '-')
+				fprintf(f, "%s%.*s%s", codes[ST_BOLD],
+				    (int)(q - p), p, codes[ST_RESET]);
+			else {
+				q = p + 3;
+				fprintf(f, "%spkg%s", codes[ST_BOLD],
+				    codes[ST_RESET]);
+			}
+			cmd_done = true;
+			p = q;
+			word_start = false;
+			continue;
+		}
+		if (*p == '<' && (q = strchr(p, '>')) != NULL) {
+			fprintf(f, "%s%.*s%s", codes[ST_WARN], (int)(q - p + 1),
+			    p, codes[ST_RESET]);
+			p = q + 1;
+			word_start = false;
+			continue;
+		}
+		if (word_start && *p == '-' && p[1] != '\0' && p[1] != ' ') {
+			q = p;
+			while (*q != '\0' && !isspace((unsigned char)*q) &&
+			    *q != ']' && *q != '|' && *q != '[')
+				q++;
+			fprintf(f, "%s%.*s%s", codes[ST_UPGRADE], (int)(q - p),
+			    p, codes[ST_RESET]);
+			p = q;
+			word_start = false;
+			continue;
+		}
+		if (*p == '[' || *p == ']' || *p == '|' || *p == '{' ||
+		    *p == '}') {
+			fprintf(f, "%s%c%s", codes[ST_DIM], *p, codes[ST_RESET]);
+			word_start = (*p != ']' && *p != '}');
+			p++;
+			continue;
+		}
+		fputc(*p, f);
+		word_start = isspace((unsigned char)*p);
+		p++;
+	}
+}
+
+int
+usage_printf(const char *fmt, ...)
+{
+	va_list ap;
+	char *text = NULL, *line, *nl;
+	int len;
+
+	va_start(ap, fmt);
+	if (!color_err) {
+		len = vfprintf(stderr, fmt, ap);
+		va_end(ap);
+		return (len);
+	}
+	len = vasprintf(&text, fmt, ap);
+	va_end(ap);
+	if (len < 0)
+		return (len);
+	for (line = text; *line != '\0'; line = nl + 1) {
+		nl = strchr(line, '\n');
+		if (nl != NULL)
+			*nl = '\0';
+		style_usage_line(stderr, line, true);
+		if (nl == NULL)
+			break;
+		fputc('\n', stderr);
+	}
+	free(text);
+	return (len);
 }

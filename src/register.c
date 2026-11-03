@@ -44,11 +44,11 @@
 void
 usage_register(void)
 {
-	fprintf(stderr, "Usage: pkg register [-dtN] [-i <input-path>]"
+	usage_printf("Usage: pkg register [-dtN] [-i <input-path>]"
 	                " [-f <plist-file>] -m <metadatadir>\n");
-	fprintf(stderr, "       pkg register [-dtN] [-i <input_path>]"
+	usage_printf("       pkg register [-dtN] [-i <input_path>]"
 		        " -M <manifest>\n\n");
-	fprintf(stderr, "For more information see 'pkg help register'.\n");
+	usage_printf("For more information see 'pkg help register'.\n");
 }
 
 int

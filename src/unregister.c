@@ -44,9 +44,9 @@
 void
 usage_unregister(void)
 {
-	fprintf(stderr, "Usage: pkg unregister [-fnqRy] [-Cgix] <pkg-name> ...\n");
-	fprintf(stderr, "       pkg unregister [-nqy] -a\n\n");
-	fprintf(stderr, "For more information see 'pkg help unregister'.\n");
+	usage_printf("Usage: pkg unregister [-fnqRy] [-Cgix] <pkg-name> ...\n");
+	usage_printf("       pkg unregister [-nqy] -a\n\n");
+	usage_printf("For more information see 'pkg help unregister'.\n");
 }
 
 int

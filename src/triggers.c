@@ -37,8 +37,8 @@
 void
 usage_triggers(void)
 {
-	fprintf(stderr, "Usage: pkg triggers [-q]\n\n");
-	fprintf(stderr, "For more information see 'pkg help triggers'.\n");
+	usage_printf("Usage: pkg triggers [-q]\n\n");
+	usage_printf("For more information see 'pkg help triggers'.\n");
 }
 
 int

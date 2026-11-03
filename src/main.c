@@ -120,6 +120,41 @@ show_command_names(void)
 		printf("%s\n", cmd[i].name);
 }
 
+/* Whether usage text written to out gets styled. */
+static bool
+usage_styled(FILE *out)
+{
+	return ((out == stdout && style_fancy()) ||
+	    (out == stderr && style_fancy_stderr()));
+}
+
+static const char *
+US(FILE *out, enum style_role r)
+{
+	return (out == stdout ? S(r) : SE(r));
+}
+
+/* One "-d   Increment debug level" or command row of the help screen. */
+static void
+usage_row(FILE *out, const char *name, const char *desc, enum style_role r)
+{
+	if (usage_styled(out))
+		fprintf(out, "  %s%-15s%s %s\n", US(out, r), name,
+		    US(out, ST_RESET), desc);
+	else
+		fprintf(out, "\t%-15s%s\n", name, desc);
+}
+
+static void
+usage_header(FILE *out, const char *title)
+{
+	if (usage_styled(out))
+		fprintf(out, "%s%s%s\n", US(out, ST_LABEL), title,
+		    US(out, ST_RESET));
+	else
+		fprintf(out, "%s:\n", title);
+}
+
 static void
 usage(const char *conffile, const char *reposdir, FILE *out, enum pkg_usage_reason reason, ...)
 {
@@ -132,14 +167,27 @@ usage(const char *conffile, const char *reposdir, FILE *out, enum pkg_usage_reas
 		va_start(vp, reason);
 		arg = va_arg(vp, const char *);
 		va_end(vp);
-		fprintf(out, "pkg: unknown command: %s\n", arg);
+		if (usage_styled(out))
+			fprintf(out, "%s%s%s %s%s:%s unknown command: %s%s%s\n",
+			    US(out, ST_ERROR), style_glyph(GL_ERROR),
+			    US(out, ST_RESET), US(out, ST_DIM), getprogname(),
+			    US(out, ST_RESET), US(out, ST_BOLD), arg,
+			    US(out, ST_RESET));
+		else
+			fprintf(out, "pkg: unknown command: %s\n", arg);
 		goto out;
 	}
 	else if (reason == PKG_USAGE_INVALID_ARGUMENTS) {
 		va_start(vp, reason);
 		arg = va_arg(vp, const char *);
 		va_end(vp);
-		fprintf(out, "pkg: %s\n", arg);
+		if (usage_styled(out))
+			fprintf(out, "%s%s%s %s%s:%s %s\n", US(out, ST_ERROR),
+			    style_glyph(GL_ERROR), US(out, ST_RESET),
+			    US(out, ST_DIM), getprogname(), US(out, ST_RESET),
+			    arg);
+		else
+			fprintf(out, "pkg: %s\n", arg);
 	}
 
 #ifdef HAVE_LIBJAIL
@@ -147,27 +195,30 @@ usage(const char *conffile, const char *reposdir, FILE *out, enum pkg_usage_reas
 #else
 #define JAIL_ARG
 #endif
-	fprintf(out, "Usage: pkg [-v] [-d] [-l] [-N] ["JAIL_ARG"-c <chroot path>|-r <rootdir>] [-C <configuration file>] [-R <repo config dir>] [-o var=value] [-4|-6] <command> [<args>]\n");
+	style_usage_line(out, "Usage: pkg [-v] [-d] [-l] [-N] ["JAIL_ARG"-c <chroot path>|-r <rootdir>] [-C <configuration file>] [-R <repo config dir>] [-o var=value] [-4|-6] <command> [<args>]\n", usage_styled(out));
 	if (reason == PKG_USAGE_HELP) {
-		fprintf(out, "Global options supported:\n");
-		fprintf(out, "\t%-15s%s\n", "-d", "Increment debug level");
+		if (usage_styled(out))
+			putc('\n', out);
+		usage_header(out, "Global options supported");
+		usage_row(out, "-d", "Increment debug level", ST_UPGRADE);
 #ifdef HAVE_LIBJAIL
-		fprintf(out, "\t%-15s%s\n", "-j", "Execute pkg(8) inside a jail(8)");
+		usage_row(out, "-j", "Execute pkg(8) inside a jail(8)", ST_UPGRADE);
 #endif
-		fprintf(out, "\t%-15s%s\n", "-r", "Execute pkg(8) using relocating installation to <rootdir>");
-		fprintf(out, "\t%-15s%s\n", "-c", "Execute pkg(8) inside a chroot(8)");
-		fprintf(out, "\t%-15s%s\n", "-C", "Use the specified configuration file");
-		fprintf(out, "\t%-15s%s\n", "-R", "Directory to search for individual repository configurations");
-		fprintf(out, "\t%-15s%s\n", "-l", "List available commands and exit");
-		fprintf(out, "\t%-15s%s\n", "-v", "Display pkg(8) version");
-		fprintf(out, "\t%-15s%s\n", "-N", "Test if pkg(8) is activated and avoid auto-activation");
-		fprintf(out, "\t%-15s%s\n", "-o", "Override configuration option from the command line");
-		fprintf(out, "\t%-15s%s\n", "-4", "Only use IPv4");
-		fprintf(out, "\t%-15s%s\n", "-6", "Only use IPv6");
-		fprintf(out, "\nCommands supported:\n");
+		usage_row(out, "-r", "Execute pkg(8) using relocating installation to <rootdir>", ST_UPGRADE);
+		usage_row(out, "-c", "Execute pkg(8) inside a chroot(8)", ST_UPGRADE);
+		usage_row(out, "-C", "Use the specified configuration file", ST_UPGRADE);
+		usage_row(out, "-R", "Directory to search for individual repository configurations", ST_UPGRADE);
+		usage_row(out, "-l", "List available commands and exit", ST_UPGRADE);
+		usage_row(out, "-v", "Display pkg(8) version", ST_UPGRADE);
+		usage_row(out, "-N", "Test if pkg(8) is activated and avoid auto-activation", ST_UPGRADE);
+		usage_row(out, "-o", "Override configuration option from the command line", ST_UPGRADE);
+		usage_row(out, "-4", "Only use IPv4", ST_UPGRADE);
+		usage_row(out, "-6", "Only use IPv6", ST_UPGRADE);
+		putc('\n', out);
+		usage_header(out, "Commands supported");
 
 		for (i = 0; i < cmd_len; i++)
-			fprintf(out, "\t%-15s%s\n", cmd[i].name, cmd[i].desc);
+			usage_row(out, cmd[i].name, cmd[i].desc, ST_NAME);
 
 		if (!pkg_initialized() && pkg_ini(conffile, reposdir, 0) != EPKG_OK)
 			errx(EXIT_FAILURE, "Cannot parse configuration file!");
@@ -178,20 +229,24 @@ usage(const char *conffile, const char *reposdir, FILE *out, enum pkg_usage_reas
 			if (pkg_plugins_init() != EPKG_OK)
 				warnx("Some plugins cannot be loaded");
 
-			fprintf(out, "\nCommands provided by plugins:\n");
+			putc('\n', out);
+			usage_header(out, "Commands provided by plugins");
 
 			vec_foreach(plugins, i) {
-				fprintf(out, "\t%-15s%s\n", plugins.d[i]->name,
-				    plugins.d[i]->desc);
+				usage_row(out, plugins.d[i]->name,
+				    plugins.d[i]->desc, ST_NAME);
 			}
 		}
-		fprintf(out, "\nFor more information on the different commands"
-					" see 'pkg help <command>'.\n");
+		putc('\n', out);
+		style_usage_line(out, "For more information on the different "
+		    "commands see 'pkg help <command>'.\n", usage_styled(out));
 		exit(EXIT_SUCCESS);
 	}
 
 out:
-	fprintf(out, "\nFor more information on available commands and options see 'pkg help'.\n");
+	putc('\n', out);
+	style_usage_line(out, "For more information on available commands "
+	    "and options see 'pkg help'.\n", usage_styled(out));
 	exit(EXIT_FAILURE);
 }
 

@@ -174,8 +174,8 @@ pkgcli_update(bool force, bool strict, c_charv_t *reponames)
 void
 usage_update(void)
 {
-	fprintf(stderr, "Usage: pkg update [-fq] [-r reponame]\n\n");
-	fprintf(stderr, "For more information, see 'pkg help update'.\n");
+	usage_printf("Usage: pkg update [-fq] [-r reponame]\n\n");
+	usage_printf("For more information, see 'pkg help update'.\n");
 }
 
 int

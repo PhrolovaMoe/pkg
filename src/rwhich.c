@@ -18,8 +18,8 @@
 void
 usage_rwhich(void)
 {
-	fprintf(stderr, "Usage: pkg rwhich [-gq] [-r reponame] <file>\n\n");
-	fprintf(stderr, "For more information see 'pkg help rwhich'.\n");
+	usage_printf("Usage: pkg rwhich [-gq] [-r reponame] <file>\n\n");
+	usage_printf("For more information see 'pkg help rwhich'.\n");
 }
 
 int

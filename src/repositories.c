@@ -20,8 +20,7 @@
 void
 usage_repositories(void)
 {
-        fprintf(stderr,
-	    "Usage: pkg repositories [-edl] [repository]\n"
+        usage_printf("Usage: pkg repositories [-edl] [repository]\n"
 	    "       pkg repositories <repository> <enable|disable|reset>\n\n");
 }
 

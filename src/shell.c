@@ -36,8 +36,8 @@
 void
 usage_shell(void)
 {
-	fprintf(stderr, "Usage: pkg shell\n\n");
-	fprintf(stderr, "For more information see 'pkg help shell'.\n");
+	usage_printf("Usage: pkg shell\n\n");
+	usage_printf("For more information see 'pkg help shell'.\n");
 }
 
 int

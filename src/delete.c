@@ -45,9 +45,9 @@
 void
 usage_delete(void)
 {
-	fprintf(stderr, "Usage: pkg delete [-DfnqRy] [--autoremove] [-Cgix] [-G glob] <pkg-name> ...\n");
-	fprintf(stderr, "       pkg delete [-Dnqy] [--autoremove] [-G glob] -a\n\n");
-	fprintf(stderr, "For more information see 'pkg help delete'.\n");
+	usage_printf("Usage: pkg delete [-DfnqRy] [--autoremove] [-Cgix] [-G glob] <pkg-name> ...\n");
+	usage_printf("       pkg delete [-Dnqy] [--autoremove] [-G glob] -a\n\n");
+	usage_printf("For more information see 'pkg help delete'.\n");
 }
 
 int

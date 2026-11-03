@@ -49,8 +49,8 @@ static const char* vop_names[] = {
 void
 usage_audit(void)
 {
-	fprintf(stderr, "Usage: pkg audit [-RFqr] [--raw[=format]|-R[format] [-f file] <pattern>\n\n");
-	fprintf(stderr, "For more information see 'pkg help audit'.\n");
+	usage_printf("Usage: pkg audit [-RFqr] [--raw[=format]|-R[format] [-f file] <pattern>\n\n");
+	usage_printf("For more information see 'pkg help audit'.\n");
 }
 
 static void

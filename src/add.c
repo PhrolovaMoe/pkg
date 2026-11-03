@@ -56,9 +56,9 @@ is_url(const char * const pattern)
 void
 usage_add(void)
 {
-	fprintf(stderr, "Usage: pkg add [-IAfqM] <pkg-name> ...\n");
-	fprintf(stderr, "       pkg add [-IAfqM] <protocol>://<path>/<pkg-name> ...\n\n");
-	fprintf(stderr, "For more information see 'pkg help add'.\n");
+	usage_printf("Usage: pkg add [-IAfqM] <pkg-name> ...\n");
+	usage_printf("       pkg add [-IAfqM] <protocol>://<path>/<pkg-name> ...\n\n");
+	usage_printf("For more information see 'pkg help add'.\n");
 }
 
 int

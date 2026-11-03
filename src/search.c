@@ -230,25 +230,25 @@ usage_search(void)
 {
 	int i, n;
 
-	fprintf(stderr, "Usage: pkg search [-eU] [-r repo] [-S search] "
+	usage_printf("Usage: pkg search [-eU] [-r repo] [-S search] "
 	    "[-L label] [-Q mod]... [-Cgix] <pkg-name>\n");
-	fprintf(stderr, "       pkg search [-cDdefopqRU] [-r repo] "
+	usage_printf("       pkg search [-cDdefopqRU] [-r repo] "
 	    "[-Cgix] <pattern>\n\n");
-	n = fprintf(stderr, "       Search and Label options:");
+	n = usage_printf("       Search and Label options:");
 	for (i = 0; search_label[i].option != NULL; i++) {
 		if (n > 72)
-			n = fprintf(stderr, "\n            ");
-		n += fprintf(stderr, " %s", search_label[i].option);
+			n = usage_printf("\n            ");
+		n += usage_printf(" %s", search_label[i].option);
 	}
-	fprintf(stderr, "\n");
-	n = fprintf(stderr, "       Output Modifiers:");
+	usage_printf("\n");
+	n = usage_printf("       Output Modifiers:");
 	for (i = 0; modifiers[i].option != NULL; i++) {
 		if (n > 68)
-			n = fprintf(stderr, "\n            ");
-		n += fprintf(stderr, " %s", modifiers[i].option);
+			n = usage_printf("\n            ");
+		n += usage_printf(" %s", modifiers[i].option);
 	}
-	fprintf(stderr, "\n");
-	fprintf(stderr, "For more information see 'pkg help search'.\n");
+	usage_printf("\n");
+	usage_printf("For more information see 'pkg help search'.\n");
 }
 
 int

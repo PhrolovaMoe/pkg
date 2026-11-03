@@ -55,8 +55,8 @@ static const char vuln_end_lit[] = "**END**";
 void
 usage_upgrade(void)
 {
-	fprintf(stderr, "Usage: pkg upgrade [-fInFNqUy] [--autoremove] [--no-remove] [-r reponame] [-Cgix] <pkg-name> ...\n\n");
-	fprintf(stderr, "For more information see 'pkg help upgrade'.\n");
+	usage_printf("Usage: pkg upgrade [-fInFNqUy] [--autoremove] [--no-remove] [-r reponame] [-Cgix] <pkg-name> ...\n\n");
+	usage_printf("For more information see 'pkg help upgrade'.\n");
 }
 
 static void

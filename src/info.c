@@ -97,11 +97,11 @@ parse_version_op(char *pkgname, int j, char **verp, int *signp)
 void
 usage_info(void)
 {
-	fprintf(stderr, "Usage: pkg info <pkg-name>\n");
-	fprintf(stderr, "       pkg info -a\n");
-	fprintf(stderr, "       pkg info [-AbBDdefIklOqRrs] [-Cgix] [-L depth] <pkg-name>\n");
-	fprintf(stderr, "       pkg info [-AbBDdfIlqRrs] -F <pkg-file>\n\n");
-	fprintf(stderr, "For more information see 'pkg help info'.\n");
+	usage_printf("Usage: pkg info <pkg-name>\n");
+	usage_printf("       pkg info -a\n");
+	usage_printf("       pkg info [-AbBDdefIklOqRrs] [-Cgix] [-L depth] <pkg-name>\n");
+	usage_printf("       pkg info [-AbBDdfIlqRrs] -F <pkg-file>\n\n");
+	usage_printf("For more information see 'pkg help info'.\n");
 }
 
 /*

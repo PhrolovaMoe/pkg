@@ -25,8 +25,8 @@
 void
 usage_which(void)
 {
-	fprintf(stderr, "Usage: pkg which [-mqgop] <file>\n\n");
-	fprintf(stderr, "For more information see 'pkg help which'.\n");
+	usage_printf("Usage: pkg which [-mqgop] <file>\n\n");
+	usage_printf("For more information see 'pkg help which'.\n");
 }
 
 static bool is_there(char *);

@@ -44,8 +44,8 @@
 void
 usage_ssh(void)
 {
-	fprintf(stderr, "Usage: pkg ssh\n\n");
-	fprintf(stderr, "For more information see 'pkg help ssh'.\n");
+	usage_printf("Usage: pkg ssh\n\n");
+	usage_printf("For more information see 'pkg help ssh'.\n");
 }
 
 int

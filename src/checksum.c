@@ -17,13 +17,12 @@
 void
 usage_checksum(void)
 {
-	fprintf(stderr,
-	    "Usage: pkg checksum [-qt <type>] [-c <hash>] <file> ...\n\n");
-	fprintf(stderr, "Types: sha256_hex, sha512_hex, blake2_hex, blake2s_hex, "
+	usage_printf("Usage: pkg checksum [-qt <type>] [-c <hash>] <file> ...\n\n");
+	usage_printf("Types: sha256_hex, sha512_hex, blake2_hex, blake2s_hex, "
 	    "sha256_base32, sha512_base32, blake2_base32 (default), "
 	    "blake2s_base32, "
 	    "sha256_zbase32, blake2_zbase32, blake2s_zbase32\n\n");
-	fprintf(stderr, "For more information see 'pkg help checksum'.\n");
+	usage_printf("For more information see 'pkg help checksum'.\n");
 }
 
 int

@@ -28,8 +28,8 @@
 void
 usage_updating(void)
 {
-	fprintf(stderr, "Usage: pkg updating [-i] [-d YYYYMMDD] [-f file] [portname ...]\n");
-	fprintf(stderr, "For more information see 'pkg help updating'.\n");
+	usage_printf("Usage: pkg updating [-i] [-d YYYYMMDD] [-f file] [portname ...]\n");
+	usage_printf("For more information see 'pkg help updating'.\n");
 
 }
 
